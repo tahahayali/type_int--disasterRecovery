@@ -319,7 +319,7 @@ def receive_phone_data():
             "message": "Phone data received",
             "phone_id": phone_id,
             "buffered": True
-        }), 200
+        }), 10
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -413,7 +413,7 @@ def get_locations():
             "status": "success",
             "count": len(result),
             "locations": result
-        }), 200
+        }), 10
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -488,7 +488,7 @@ def generate_mock_data():
             "status": "success",
             "message": f"Generated {num_phones} mock phone locations and {num_responders} first responders",
             "phones": mock_phones
-        }), 200
+        }), 10
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -513,7 +513,7 @@ def get_stats():
             "unique_phones": unique_phones,
             "buffered_phones": len(phone_data_buffer),
             "latest_location_time": latest_time
-        }), 200
+        }), 10
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
