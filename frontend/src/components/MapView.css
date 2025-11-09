@@ -1,0 +1,302 @@
+.MapView {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  width: 100%;
+  background: #f3f4f6;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.loading-spinner {
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-container p {
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 1000;
+  background: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state p {
+  color: #374151;
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0.5rem 0;
+}
+
+.empty-subtitle {
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.victim-marker {
+  background: transparent;
+  border: none;
+}
+
+.marker-container {
+  width: 40px;
+  height: 40px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: 2px solid;
+}
+
+.marker-container:hover {
+  transform: rotate(-45deg) scale(1.15);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+}
+
+.marker-pin {
+  width: 36px;
+  height: 36px;
+  border-radius: 50% 50% 50% 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(45deg);
+  background: #10b981;
+  border: 2px solid white;
+}
+
+.marker-battery {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  letter-spacing: -0.025em;
+}
+
+/* Popup Styles */
+.victim-popup .leaflet-popup-content-wrapper {
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 0;
+  overflow: hidden;
+}
+
+.victim-popup .leaflet-popup-content {
+  margin: 0;
+  padding: 0;
+  min-width: 280px;
+}
+
+.popup-content {
+  background: white;
+}
+
+.popup-header {
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  color: white;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.popup-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.popup-battery {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+}
+
+.battery-icon {
+  font-size: 1.125rem;
+}
+
+.battery-percentage {
+  font-weight: 700;
+}
+
+.battery-status {
+  font-size: 0.75rem;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.popup-body {
+  padding: 1rem;
+}
+
+.popup-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.popup-row:last-child {
+  margin-bottom: 0;
+}
+
+.popup-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: 80px;
+}
+
+.popup-value {
+  font-size: 0.875rem;
+  color: #111827;
+  font-weight: 600;
+  text-align: right;
+  font-family: 'Courier New', monospace;
+  word-break: break-word;
+}
+
+.popup-value-small {
+  font-size: 0.75rem;
+  color: #4b5563;
+  font-weight: 500;
+  text-align: right;
+}
+
+.popup-coords {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8125rem;
+  color: #111827;
+  font-weight: 600;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .MapView {
+    order: 1;
+    height: 50vh;
+  }
+  
+  .empty-state {
+    padding: 1.5rem;
+    max-width: 90%;
+  }
+  
+  .empty-icon {
+    font-size: 2.5rem;
+  }
+  
+  .victim-popup .leaflet-popup-content {
+    min-width: 240px;
+  }
+  
+  .popup-header {
+    padding: 0.875rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .popup-header h3 {
+    font-size: 0.875rem;
+  }
+  
+  .popup-battery {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .popup-body {
+    padding: 0.875rem;
+  }
+  
+  .popup-row {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .popup-value,
+  .popup-coords {
+    text-align: left;
+    width: 100%;
+  }
+  
+  .marker-container {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .marker-pin {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .marker-battery {
+    font-size: 0.5625rem;
+  }
+}
+
+/* Custom leaflet popup close button */
+.victim-popup .leaflet-popup-close-button {
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 300;
+  padding: 0.5rem;
+}
+
+.victim-popup .leaflet-popup-close-button:hover {
+  color: #f3f4f6;
+}
