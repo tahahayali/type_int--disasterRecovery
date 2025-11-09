@@ -55,7 +55,7 @@ android_app/
 
 # Docker (exclude other Dockerfiles, keep root one)
 frontend/Dockerfile
-flask_dashboard/Dockerfile
+backend/Dockerfile
 docker-compose.override.yml
 *.dockerignore
 

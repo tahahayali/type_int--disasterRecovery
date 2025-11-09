@@ -112,7 +112,7 @@ For development with hot-reload, you can still run services separately:
 docker-compose up mongodb
 
 # Terminal 2: Start Flask backend
-cd flask_dashboard
+cd backend
 python commandcenterbackend.py
 
 # Terminal 3: Start React frontend

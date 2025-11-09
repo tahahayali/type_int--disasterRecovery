@@ -79,7 +79,7 @@ net start MongoDB
 pip install -r requirements.txt
 
 # Run the Flask server
-cd flask_dashboard
+cd backend
 python commandcenterbackend.py
 ```
 

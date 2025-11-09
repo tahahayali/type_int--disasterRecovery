@@ -51,7 +51,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip cache purge
 
 # Copy Flask application from flask_dashboard directory
-COPY flask_dashboard/commandcenterbackend.py .
+COPY backend/old_files/flask_dashboard/commandcenterbackend.py .
 
 # Copy built React app from builder stage to static directory
 COPY --from=react-builder /build/frontend/build ./static
