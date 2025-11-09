@@ -66,11 +66,6 @@ function App() {
     }
   };
 
-  const generateMockData = async (count = 5) => {
-    // Mock data generation removed - users must sign up via /api/signup
-    console.log('Mock data generation disabled. Use /api/signup to create users.');
-  };
-
   useEffect(() => {
     // Initial fetch
     fetchLocations();
@@ -96,7 +91,6 @@ function App() {
           stats={stats}
           loading={loading}
           error={error}
-          onGenerateMockData={generateMockData}
           onRefresh={fetchLocations}
           selectedLocation={selectedLocation}
         />

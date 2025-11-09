@@ -1,16 +1,8 @@
 // File: ControlPanel.js
-import React, { useState } from 'react';
+import React from 'react';
 import './ControlPanel.css';
 
-function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, selectedLocation }) {
-  const [mockCount, setMockCount] = useState(5);
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  const handleGenerateMock = async () => {
-    setIsGenerating(true);
-    await onGenerateMockData(mockCount);
-    setIsGenerating(false);
-  };
+function ControlPanel({ stats, loading, error, onRefresh, selectedLocation }) {
 
   const getBatteryColor = (percentage) => {
     if (percentage >= 50) return '#10b981';
@@ -162,29 +154,6 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
           <button className="btn btn-primary" onClick={onRefresh} disabled={loading}>
             {loading ? '⏳ Refreshing...' : '🔄 Refresh Now'}
           </button>
-        </div>
-
-        <div className="control-group">
-          <label htmlFor="mock-count">Manual Test Data</label>
-          <div className="input-group">
-            <input
-              id="mock-count"
-              type="number"
-              min="1"
-              max="50"
-              value={mockCount}
-              onChange={(e) => setMockCount(parseInt(e.target.value) || 1)}
-              className="input-field"
-              placeholder="Count"
-            />
-            <button
-              className="btn btn-secondary btn-inline"
-              onClick={handleGenerateMock}
-              disabled={isGenerating}
-            >
-              {isGenerating ? '⏳' : '➕ Generate'}
-            </button>
-          </div>
         </div>
       </div>
 

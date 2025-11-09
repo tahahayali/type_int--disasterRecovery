@@ -71,46 +71,80 @@ def signup():
         
         # Check if user already exists
         existing_user = users_collection.find_one({"uuid": uuid})
-        if existing_user:
-            return jsonify({"error": "User with this uuid already exists"}), 409
         
-        # Create user document with skeleton structure
         current_time = datetime.utcnow().isoformat()
-        user_document = {
-            "uuid": uuid,
-            "type": user_type,
-            "name": name,
-            "age": age if age is not None else None,
-            "height": height if height is not None else None,
-            "weight": weight if weight is not None else None,
-            "medical": medical if medical is not None else None,
-            "location": {
-                "lat": None,
-                "long": None,
-                "last_updated": None
-            },
-            "battery": {
-                "percentage": None,
-                "time_left_till_off": None,
-                "last_updated": None
-            },
-            "messages": [],
-            "emergency_questionaire": None,
-            "created_at": current_time,
-            "updated_at": current_time
-        }
         
-        # Insert the user into the database
-        result = users_collection.insert_one(user_document)
+        if existing_user:
+            # User exists - update their profile information
+            update_fields = {
+                "type": user_type,
+                "name": name,
+                "updated_at": current_time
+            }
+            
+            # Only update optional fields if provided
+            if age is not None:
+                update_fields["age"] = age
+            if height is not None:
+                update_fields["height"] = height
+            if weight is not None:
+                update_fields["weight"] = weight
+            if medical is not None:
+                update_fields["medical"] = medical
+            
+            # Update the existing user
+            users_collection.update_one(
+                {"uuid": uuid},
+                {"$set": update_fields}
+            )
+            
+            # Fetch updated user
+            updated_user = users_collection.find_one({"uuid": uuid})
+            updated_user.pop('_id', None)
+            
+            return jsonify({
+                "status": "success",
+                "message": "User profile updated successfully",
+                "user": updated_user
+            }), 200
         
-        # Remove the MongoDB _id from the response
-        user_document.pop('_id', None)
-        
-        return jsonify({
-            "status": "success",
-            "message": "User registered successfully",
-            "user": user_document
-        }), 201
+        else:
+            # Create new user document with skeleton structure
+            user_document = {
+                "uuid": uuid,
+                "type": user_type,
+                "name": name,
+                "age": age if age is not None else None,
+                "height": height if height is not None else None,
+                "weight": weight if weight is not None else None,
+                "medical": medical if medical is not None else None,
+                "location": {
+                    "lat": None,
+                    "long": None,
+                    "last_updated": None
+                },
+                "battery": {
+                    "percentage": None,
+                    "time_left_till_off": None,
+                    "last_updated": None
+                },
+                "messages": [],
+                "emergency_questionaire": None,
+                "created_at": current_time,
+                "updated_at": current_time
+            }
+            
+            # Insert the user into the database
+            result = users_collection.insert_one(user_document)
+            
+            # Remove the MongoDB _id from the response
+            user_document.pop('_id', None)
+            
+            return jsonify({
+                "status": "success",
+                "message": "User registered successfully",
+                "user": user_document
+            }), 201
         
     except Exception as e:
         current_app.logger.error(f"Error during signup: {e}")
@@ -498,6 +532,14 @@ def get_all_users():
         # Convert MongoDB documents to JSON-serializable format
         users_list = []
         for user in users:
+            # Sort messages by time (oldest first)
+            messages = user.get("messages", [])
+            if messages:
+                try:
+                    messages = sorted(messages, key=lambda m: m.get('time', ''))
+                except Exception as e:
+                    current_app.logger.warning(f"Could not sort messages for user {user.get('uuid')}: {e}")
+            
             user_dict = {
                 "uuid": user.get("uuid"),
                 "type": user.get("type"),
@@ -516,7 +558,7 @@ def get_all_users():
                     "time_left_till_off": None,
                     "last_updated": None
                 }),
-                "messages": user.get("messages", []),
+                "messages": messages,
                 "emergency_questionaire": user.get("emergency_questionaire"),
                 "created_at": user.get("created_at"),
                 "updated_at": user.get("updated_at")

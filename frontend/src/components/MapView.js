@@ -92,15 +92,12 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
   };
 
   const parseQuestionnaire = (questionnaireStr) => {
-    if (!questionnaireStr || questionnaireStr.length !== 7) return null;
+    if (!questionnaireStr || questionnaireStr.length < 4) return null;
     const questions = [
-      'Injured?',
-      'Trapped?',
-      'Medical Emergency?',
-      'Need Water?',
-      'Need Food?',
-      'Need Shelter?',
-      'Other Help?'
+      'Do you need assistance?',
+      'Are you alone?',
+      'Are you or anybody around you injured/in need of urgent medical care?',
+      'Are you stuck?'
     ];
     return questions.map((q, i) => ({
       question: q,
@@ -291,21 +288,16 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
                             
                             {location.messages && location.messages.length > 0 && (
                               <div className="popup-row">
-                                <span className="popup-label">Messages:</span>
+                                <span className="popup-label">Messages ({location.messages.length}):</span>
                                 <div className="messages-container">
-                                  {location.messages.slice(-3).map((msg, idx) => (
-                                    <div key={idx} className="message-item">
+                                  {location.messages.map((msg, idx) => (
+                                    <div key={msg.message_id || idx} className="message-item">
                                       <div className="message-time">
                                         {new Date(msg.time).toLocaleTimeString()}
                                       </div>
                                       <div className="message-text">{msg.message}</div>
                                     </div>
                                   ))}
-                                  {location.messages.length > 3 && (
-                                    <div className="message-more">
-                                      +{location.messages.length - 3} more
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                             )}

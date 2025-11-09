@@ -1,0 +1,42 @@
+# Frontend-Only Dockerfile with Production Build
+# Serves React app and connects to remote backend
+
+# Build stage
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm install && npm cache clean --force
+
+# Copy frontend source
+COPY frontend/ ./
+
+# Set backend URL to public server
+ENV REACT_APP_API_URL=http://fennecs.duckdns.org:5000
+
+# Build React app for production
+RUN npm run build
+
+# Production stage - serve with nginx
+FROM nginx:alpine
+
+# Copy built React app
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Copy custom nginx config
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 80
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
+
