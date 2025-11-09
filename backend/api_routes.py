@@ -277,13 +277,30 @@ def receive_byte_string():
                 # Parse the message
                 parsed = parse_message_bytes(message_bytes)
                 
-                # Convert sender_id (4-byte uint) to 4-character string UUID
-                sender_uuid = f"{parsed['sender_id']:04d}"
+                # Convert sender_id to UUID string
+                # The sender_id is a 4-byte value that represents either:
+                # 1. A 4-character ASCII string (like "8U4A", "MPHH")
+                # 2. A numeric ID (like 1, 2, 1001) that should be zero-padded
+                
+                sender_id_int = parsed['sender_id']
+                
+                # Try to decode as ASCII first (for alphanumeric UUIDs)
+                try:
+                    sender_id_bytes = sender_id_int.to_bytes(4, byteorder='big')
+                    # Try to decode as ASCII/UTF-8 and strip null bytes
+                    sender_uuid = sender_id_bytes.decode('ascii').rstrip('\x00')
+                    # If it's empty or contains non-printable chars, fall back to numeric
+                    if not sender_uuid or not sender_uuid.isprintable():
+                        raise ValueError("Not a valid ASCII UUID")
+                except (ValueError, UnicodeDecodeError):
+                    # Fall back to zero-padded numeric format
+                    sender_uuid = f"{sender_id_int:04d}"
+                
                 payload_type = parsed['payload_type']
                 timestamp_iso = datetime.utcfromtimestamp(parsed['timestamp']).isoformat()
                 
                 # DEBUG: Log what we're looking for
-                current_app.logger.info(f"Processing message {idx}: sender_id={parsed['sender_id']}, sender_uuid={sender_uuid}, type={payload_type}")
+                current_app.logger.info(f"Processing message {idx}: sender_id={sender_id_int}, sender_uuid='{sender_uuid}', type={payload_type}")
                 
                 # Find user by UUID
                 user = users_collection.find_one({"uuid": sender_uuid})
