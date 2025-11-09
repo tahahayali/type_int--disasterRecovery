@@ -1,16 +1,16 @@
 package com.example.android__front_end
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.example.android__front_end.ui.theme.Android__Front_endTheme
 
 class MainActivity : ComponentActivity() {
@@ -20,12 +20,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             Android__Front_endTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MainScreen(
-                        onButtonClick = {
-                            // When the button is clicked, open SecondActivity
-                            val intent = Intent(this, SecondActivity::class.java)
-                            startActivity(intent)
-                        },
+                    Greeting(
+                        name = "Android",
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -33,26 +29,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 @Composable
-fun MainScreen(onButtonClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
+fun Greeting(name: String, modifier: Modifier = Modifier) {
+    Text(
+        text = "Hello $name!",
         modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(text = "Hello Android!", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(20.dp))
-        Button(onClick = onButtonClick) {
-            Text("Go to Second Screen")
-        }
-    }
+    )
 }
 
 @Preview(showBackground = true)
 @Composable
-fun MainScreenPreview() {
+fun GreetingPreview() {
     Android__Front_endTheme {
-        MainScreen(onButtonClick = {})
+        Greeting("Android")
     }
 }
