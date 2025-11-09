@@ -9,7 +9,7 @@ import os
 from typing import Dict, List
 
 # Determine the base directory and static folder
-# In Docker: Flask file is at /app/law_enforcement_dashboard.py, static is at /app/static
+# In Docker: Flask file is at /app/commandcenterbackend.py, static is at /app/static
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, 'static')
 

@@ -1,5 +1,5 @@
 // File: MapView.js
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,14 +13,12 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Battery color helper
 const getBatteryColor = (percentage) => {
   if (percentage >= 50) return '#10b981';
   if (percentage >= 20) return '#f59e0b';
   return '#ef4444';
 };
 
-// Custom victim marker
 const createVictimIcon = (batteryPercentage = 50, isSelected = false) => {
   const batteryColor = getBatteryColor(batteryPercentage);
   const borderColor = isSelected ? '#3b82f6' : batteryColor;
@@ -38,7 +36,6 @@ const createVictimIcon = (batteryPercentage = 50, isSelected = false) => {
   });
 };
 
-// Custom first responder marker
 const createFirstResponderIcon = (isSelected = false) => {
   const borderColor = isSelected ? '#1e40af' : '#3b82f6';
   const borderWidth = isSelected ? '4px' : '3px';
@@ -60,7 +57,7 @@ function MapBoundsUpdater({ locations }) {
   const map = useMap();
   useEffect(() => {
     if (locations && locations.length > 0) {
-      const bounds = locations.map(loc => [loc.latitude, loc.longitude]);
+      const bounds = locations.map((loc) => [loc.latitude, loc.longitude]);
       if (bounds.length > 0) {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
       }
@@ -71,6 +68,7 @@ function MapBoundsUpdater({ locations }) {
 
 function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
   const mapRef = useRef(null);
+  const [savedVictims, setSavedVictims] = useState([]); // NEW: track saved victims
   const defaultCenter = [42.8864, -78.8784]; // Buffalo, NY
   const defaultZoom = 12;
 
@@ -87,13 +85,24 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
   // Generate UUIDs for victims (persistent across renders)
   const victimUUIDs = useMemo(() => {
     const mapping = {};
-    locations.forEach(loc => {
+    locations.forEach((loc) => {
       if (loc.type === 'victim') {
         mapping[loc.phone_id] = uuidv4();
       }
     });
     return mapping;
   }, [locations]);
+
+  // Filter out saved victims so they don’t show on the map
+  const visibleLocations = useMemo(() => {
+    return locations.filter(
+      (loc) => loc.type !== 'victim' || !savedVictims.includes(loc.phone_id)
+    );
+  }, [locations, savedVictims]);
+
+  const handleMarkAsSaved = (phone_id) => {
+    setSavedVictims((prev) => [...prev, phone_id]);
+  };
 
   return (
     <div className="MapView">
@@ -123,9 +132,9 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <MapBoundsUpdater locations={locations} />
+            <MapBoundsUpdater locations={visibleLocations} />
 
-            {locations.map((location, index) => {
+            {visibleLocations.map((location, index) => {
               const isFirstResponder = location.type === 'first_responder';
               const isSelected = selectedLocation?.phone_id === location.phone_id;
               const batteryPercentage = location.battery_percentage || 0;
@@ -207,6 +216,16 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
                                 <div>Lon: {location.longitude.toFixed(6)}</div>
                               </div>
                             </div>
+
+                            {/* ✅ NEW: Mark as Saved button */}
+                            <div className="popup-actions">
+                              <button
+                                className="btn-save"
+                                onClick={() => handleMarkAsSaved(location.phone_id)}
+                              >
+                                ✅ Mark as Saved
+                              </button>
+                            </div>
                           </>
                         )}
                       </div>
@@ -223,6 +242,7 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
 }
 
 export default MapView;
+
 
 
 

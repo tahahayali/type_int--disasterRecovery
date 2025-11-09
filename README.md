@@ -80,7 +80,7 @@ pip install -r requirements.txt
 
 # Run the Flask server
 cd flask_dashboard
-python law_enforcement_dashboard.py
+python commandcenterbackend.py
 ```
 
 The Flask server will run on `http://localhost:5000`

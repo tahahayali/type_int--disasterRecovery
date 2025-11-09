@@ -113,7 +113,7 @@ docker-compose up mongodb
 
 # Terminal 2: Start Flask backend
 cd flask_dashboard
-python law_enforcement_dashboard.py
+python commandcenterbackend.py
 
 # Terminal 3: Start React frontend
 cd frontend

@@ -51,7 +51,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip cache purge
 
 # Copy Flask application from flask_dashboard directory
-COPY flask_dashboard/law_enforcement_dashboard.py .
+COPY flask_dashboard/commandcenterbackend.py .
 
 # Copy built React app from builder stage to static directory
 COPY --from=react-builder /build/frontend/build ./static
@@ -67,5 +67,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD python -c "import socket; s=socket.socket(); s.connect(('localhost', 5000)); s.close()" || exit 1
 
 # Run the Flask application
-CMD ["python", "law_enforcement_dashboard.py"]
+CMD ["python", "commandcenterbackend.py"]
 
