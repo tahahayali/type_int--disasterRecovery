@@ -342,12 +342,26 @@ def receive_byte_string():
                     }
                 
                 elif payload_type == 4:
-                    # Message update - append to messages array
+                    # Message update - append to messages array (with deduplication)
                     message_text = parse_type4_message(parsed['payload_data'])
+                    message_id = parsed['message_id']
+                    
+                    # Check if this message_id already exists
+                    existing_msg = users_collection.find_one(
+                        {"uuid": sender_uuid, "messages.message_id": message_id}
+                    )
+                    
+                    if existing_msg:
+                        current_app.logger.info(f"Duplicate message {message_id} for user {sender_uuid}, skipping")
+                        processed_count += 1
+                        continue
+                    
                     message_obj = {
+                        'message_id': message_id,
                         'time': timestamp_iso,
                         'message': message_text
                     }
+                    
                     # Use $push to append to messages array
                     users_collection.update_one(
                         {"uuid": sender_uuid},
