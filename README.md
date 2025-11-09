@@ -27,7 +27,7 @@ A real-time dashboard for law enforcement to track victims in natural disasters 
 
 ### Docker Setup (Recommended)
 
-The easiest way to run the entire application is using Docker Compose. The setup uses a **single unified container** that serves both the Flask backend and React frontend:
+The easiest way to run the entire application is using Docker Compose. The setup uses a **single unified container** that serves both the Flask backend and React frontend: 
 
 ```bash
 # Build and start all services (MongoDB + Unified App Container)
