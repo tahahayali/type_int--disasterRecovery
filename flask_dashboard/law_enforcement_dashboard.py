@@ -42,9 +42,12 @@ except Exception as e:
 # In-memory storage for recent phone data (before storing to DB)
 phone_data_buffer: Dict[str, Dict] = {}
 
+# First responder IDs for consistent tracking
+FIRST_RESPONDER_IDS = [f"first_responder_{i+1}" for i in range(5)]
+
 # Mock location data generator (for testing)
-def generate_mock_location():
-    """Generate mock location data for victims"""
+def generate_mock_location(person_type="victim"):
+    """Generate mock location data for victims or first responders"""
     # Simulate locations around a disaster area (e.g., Buffalo, NY area)
     base_lat = 42.8864
     base_lon = -78.8784
@@ -52,12 +55,21 @@ def generate_mock_location():
     lat_offset = random.uniform(-0.1, 0.1)
     lon_offset = random.uniform(-0.1, 0.1)
     
+    # First responders typically have better battery and GPS accuracy
+    if person_type == "first_responder":
+        accuracy = random.uniform(3, 15)  # Better GPS accuracy
+        battery_percentage = random.randint(60, 100)  # Higher battery (they have equipment)
+    else:
+        accuracy = random.uniform(5, 50)  # GPS accuracy in meters
+        battery_percentage = random.randint(5, 100)  # Battery percentage (5-100%)
+    
     return {
         "latitude": base_lat + lat_offset,
         "longitude": base_lon + lon_offset,
-        "accuracy": random.uniform(5, 50),  # GPS accuracy in meters
-        "battery_percentage": random.randint(5, 100),  # Battery percentage (5-100%)
-        "timestamp": datetime.utcnow().isoformat()
+        "accuracy": accuracy,
+        "battery_percentage": battery_percentage,
+        "timestamp": datetime.utcnow().isoformat(),
+        "type": person_type
     }
 
 def store_locations_to_db():
@@ -91,6 +103,7 @@ def store_locations_to_db():
                     "longitude": data.get("longitude", 0),
                     "accuracy": data.get("accuracy", 0),
                     "battery_percentage": data.get("battery_percentage", 0),
+                    "type": data.get("type", "victim"),  # Add type field
                     "timestamp": current_time,
                     "last_seen": data.get("timestamp", current_time),
                     "phone_data": data.get("phone_data", {})
@@ -108,55 +121,157 @@ def store_locations_to_db():
         except Exception as e:
             print(f"Error storing locations to database: {e}")
 
-def auto_generate_mock_data():
-    """Automatically generate mock data every 15 seconds"""
-    while True:
-        time.sleep(15)  # Wait 15 seconds
+def initialize_first_responders():
+    """Initialize first responders on startup (3-5 responders) and store in buffer and database"""
+    try:
+        num_responders = random.randint(3, 5)
+        current_time = datetime.utcnow()
+        documents = []
         
-        try:
-            # Generate 5 new mock locations
-            mock_phones = []
-            for i in range(5):
-                phone_id = f"auto_mock_{int(time.time())}_{i+1}"
-                location = generate_mock_location()
-                
-                phone_data_buffer[phone_id] = {
-                    "phone_id": phone_id,
+        for i in range(num_responders):
+            responder_id = FIRST_RESPONDER_IDS[i]
+            location = generate_mock_location("first_responder")
+            
+            # Add to buffer for immediate availability
+            phone_data_buffer[responder_id] = {
+                "phone_id": responder_id,
+                "latitude": location["latitude"],
+                "longitude": location["longitude"],
+                "accuracy": location["accuracy"],
+                "battery_percentage": location["battery_percentage"],
+                "type": "first_responder",
+                "timestamp": current_time,
+                "phone_data": {
+                    "phone_id": responder_id,
                     "latitude": location["latitude"],
                     "longitude": location["longitude"],
                     "accuracy": location["accuracy"],
                     "battery_percentage": location["battery_percentage"],
-                    "timestamp": datetime.utcnow(),
+                    "type": "first_responder",
+                    "timestamp": location["timestamp"]
+                }
+            }
+            
+            # Also prepare for direct database storage
+            if collection is not None:
+                doc = {
+                    "phone_id": responder_id,
+                    "location": {
+                        "type": "Point",
+                        "coordinates": [location["longitude"], location["latitude"]]
+                    },
+                    "latitude": location["latitude"],
+                    "longitude": location["longitude"],
+                    "accuracy": location["accuracy"],
+                    "battery_percentage": location["battery_percentage"],
+                    "type": "first_responder",
+                    "timestamp": current_time,
+                    "last_seen": current_time,
                     "phone_data": {
-                        "phone_id": phone_id,
+                        "phone_id": responder_id,
                         "latitude": location["latitude"],
                         "longitude": location["longitude"],
                         "accuracy": location["accuracy"],
                         "battery_percentage": location["battery_percentage"],
+                        "type": "first_responder",
                         "timestamp": location["timestamp"]
                     }
                 }
-                
-                mock_phones.append({
-                    "phone_id": phone_id,
+                documents.append(doc)
+        
+        # Store directly to database if available
+        if collection is not None and documents:
+            try:
+                collection.insert_many(documents)
+                print(f"Initialized {num_responders} first responders on startup (stored in database)")
+            except Exception as db_error:
+                print(f"Initialized {num_responders} first responders on startup (database storage failed: {db_error})")
+        else:
+            print(f"Initialized {num_responders} first responders on startup (database not available, stored in buffer only)")
+    except Exception as e:
+        print(f"Error initializing first responders: {e}")
+
+def initialize_victims():
+    """Initialize 10 victims on startup and store in buffer and database"""
+    try:
+        num_victims = 10
+        current_time = datetime.utcnow()
+        documents = []
+        
+        for i in range(num_victims):
+            victim_id = f"victim_{i+1}"
+            location = generate_mock_location("victim")
+            
+            # Add to buffer for immediate availability
+            phone_data_buffer[victim_id] = {
+                "phone_id": victim_id,
+                "latitude": location["latitude"],
+                "longitude": location["longitude"],
+                "accuracy": location["accuracy"],
+                "battery_percentage": location["battery_percentage"],
+                "type": "victim",
+                "timestamp": current_time,
+                "phone_data": {
+                    "phone_id": victim_id,
                     "latitude": location["latitude"],
                     "longitude": location["longitude"],
                     "accuracy": location["accuracy"],
-                    "battery_percentage": location["battery_percentage"]
-                })
+                    "battery_percentage": location["battery_percentage"],
+                    "type": "victim",
+                    "timestamp": location["timestamp"]
+                }
+            }
             
-            print(f"Auto-generated {len(mock_phones)} mock locations at {datetime.utcnow().isoformat()}")
-            
-        except Exception as e:
-            print(f"Error in auto-generating mock data: {e}")
+            # Also prepare for direct database storage
+            if collection is not None:
+                doc = {
+                    "phone_id": victim_id,
+                    "location": {
+                        "type": "Point",
+                        "coordinates": [location["longitude"], location["latitude"]]
+                    },
+                    "latitude": location["latitude"],
+                    "longitude": location["longitude"],
+                    "accuracy": location["accuracy"],
+                    "battery_percentage": location["battery_percentage"],
+                    "type": "victim",
+                    "timestamp": current_time,
+                    "last_seen": current_time,
+                    "phone_data": {
+                        "phone_id": victim_id,
+                        "latitude": location["latitude"],
+                        "longitude": location["longitude"],
+                        "accuracy": location["accuracy"],
+                        "battery_percentage": location["battery_percentage"],
+                        "type": "victim",
+                        "timestamp": location["timestamp"]
+                    }
+                }
+                documents.append(doc)
+        
+        # Store directly to database if available
+        if collection is not None and documents:
+            try:
+                collection.insert_many(documents)
+                print(f"Initialized {num_victims} victims on startup (stored in database)")
+            except Exception as db_error:
+                print(f"Initialized {num_victims} victims on startup (database storage failed: {db_error})")
+        else:
+            print(f"Initialized {num_victims} victims on startup (database not available, stored in buffer only)")
+    except Exception as e:
+        print(f"Error initializing victims: {e}")
 
-# Start background thread for storing locations
+# Initialize first responders and victims on startup
+initialize_first_responders()
+initialize_victims()
+
+# Start background thread for storing locations to database
+# This will save any new location updates from the API to the database
 storage_thread = threading.Thread(target=store_locations_to_db, daemon=True)
 storage_thread.start()
 
-# Start background thread for auto-generating mock data
-mock_data_thread = threading.Thread(target=auto_generate_mock_data, daemon=True)
-mock_data_thread.start()
+# Note: Auto-generation of victims is disabled - only initial 10 victims are created
+# New locations can still be added via the /api/phone-data endpoint and will be saved to DB
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -194,6 +309,7 @@ def receive_phone_data():
             "longitude": float(longitude),
             "accuracy": data.get("accuracy", 0),
             "battery_percentage": data.get("battery_percentage", 0),
+            "type": data.get("type", "victim"),  # Default to victim if not specified
             "timestamp": datetime.utcnow(),
             "phone_data": data
         }
@@ -210,49 +326,88 @@ def receive_phone_data():
 
 @app.route('/api/locations', methods=['GET'])
 def get_locations():
-    """Get all victim locations from the database"""
+    """Get all victim and first responder locations from the database and buffer"""
     try:
-        if collection is None:
-            return jsonify({"error": "MongoDB not connected"}), 500
-        
         # Get query parameters
         hours = request.args.get('hours', 24, type=int)  # Default: last 24 hours
         limit = request.args.get('limit', 1000, type=int)  # Default: 1000 records
         
-        # Calculate time threshold
-        time_threshold = datetime.utcnow() - timedelta(hours=hours)
+        # Dictionary to store latest location for each phone_id
+        latest_locations = {}
         
-        # Query database for recent locations
-        query = {"timestamp": {"$gte": time_threshold}}
+        # Get locations from database if available
+        if collection is not None:
+            # Calculate time threshold
+            time_threshold = datetime.utcnow() - timedelta(hours=hours)
+            
+            # Query database for recent locations
+            query = {"timestamp": {"$gte": time_threshold}}
+            
+            # Get latest location for each phone_id from database
+            pipeline = [
+                {"$match": query},
+                {"$sort": {"timestamp": -1}},
+                {"$group": {
+                    "_id": "$phone_id",
+                    "latest_location": {"$first": "$$ROOT"}
+                }},
+                {"$replaceRoot": {"newRoot": "$latest_location"}}
+            ]
+            
+            cursor = collection.aggregate(pipeline)
+            db_locations = list(cursor)
+            
+            # Add database locations to latest_locations dict
+            for loc in db_locations:
+                phone_id = loc.get("phone_id", "unknown")
+                latest_locations[phone_id] = {
+                    "phone_id": phone_id,
+                    "latitude": loc.get("latitude", 0),
+                    "longitude": loc.get("longitude", 0),
+                    "coordinates": [loc.get("longitude", 0), loc.get("latitude", 0)],
+                    "accuracy": loc.get("accuracy", 0),
+                    "battery_percentage": loc.get("battery_percentage", 0),
+                    "type": loc.get("type", "victim"),
+                    "timestamp": loc.get("timestamp"),
+                    "last_seen": loc.get("last_seen", loc.get("timestamp"))
+                }
         
-        # Get latest location for each phone_id
-        pipeline = [
-            {"$match": query},
-            {"$sort": {"timestamp": -1}},
-            {"$group": {
-                "_id": "$phone_id",
-                "latest_location": {"$first": "$$ROOT"}
-            }},
-            {"$replaceRoot": {"newRoot": "$latest_location"}},
-            {"$limit": limit}
-        ]
+        # Also check buffer for any newer/unsaved locations (overrides database if newer)
+        for phone_id, data in phone_data_buffer.items():
+            buffer_timestamp = data.get("timestamp")
+            if isinstance(buffer_timestamp, datetime):
+                # If this phone_id is not in latest_locations, or buffer has newer data
+                if phone_id not in latest_locations or (latest_locations[phone_id]["timestamp"] < buffer_timestamp if isinstance(latest_locations[phone_id]["timestamp"], datetime) else True):
+                    latest_locations[phone_id] = {
+                        "phone_id": phone_id,
+                        "latitude": data.get("latitude", 0),
+                        "longitude": data.get("longitude", 0),
+                        "coordinates": [data.get("longitude", 0), data.get("latitude", 0)],
+                        "accuracy": data.get("accuracy", 0),
+                        "battery_percentage": data.get("battery_percentage", 0),
+                        "type": data.get("type", "victim"),
+                        "timestamp": buffer_timestamp,
+                        "last_seen": buffer_timestamp
+                    }
         
-        cursor = collection.aggregate(pipeline)
-        locations = list(cursor)
-        
-        # Format response
+        # Convert to list and format timestamps
         result = []
-        for loc in locations:
+        for phone_id, loc in latest_locations.items():
             result.append({
-                "phone_id": loc.get("phone_id", "unknown"),
-                "latitude": loc.get("latitude", 0),
-                "longitude": loc.get("longitude", 0),
-                "coordinates": [loc.get("longitude", 0), loc.get("latitude", 0)],
-                "accuracy": loc.get("accuracy", 0),
-                "battery_percentage": loc.get("battery_percentage", 0),
-                "timestamp": loc.get("timestamp").isoformat() if isinstance(loc.get("timestamp"), datetime) else str(loc.get("timestamp")),
-                "last_seen": loc.get("last_seen").isoformat() if isinstance(loc.get("last_seen"), datetime) else str(loc.get("last_seen"))
+                "phone_id": loc["phone_id"],
+                "latitude": loc["latitude"],
+                "longitude": loc["longitude"],
+                "coordinates": loc["coordinates"],
+                "accuracy": loc["accuracy"],
+                "battery_percentage": loc["battery_percentage"],
+                "type": loc["type"],
+                "timestamp": loc["timestamp"].isoformat() if isinstance(loc["timestamp"], datetime) else str(loc["timestamp"]),
+                "last_seen": loc["last_seen"].isoformat() if isinstance(loc["last_seen"], datetime) else str(loc["last_seen"])
             })
+        
+        # Sort by timestamp (newest first) and apply limit
+        result.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        result = result[:limit]
         
         return jsonify({
             "status": "success",
@@ -269,11 +424,13 @@ def generate_mock_data():
     try:
         data = request.get_json() or {}
         num_phones = data.get("count", 5)
+        num_responders = data.get("responders", 0)  # Optional: number of first responders to generate
         
         mock_phones = []
+        # Generate victim mock data
         for i in range(num_phones):
             phone_id = f"mock_phone_{i+1}"
-            location = generate_mock_location()
+            location = generate_mock_location("victim")
             
             phone_data = {
                 "phone_id": phone_id,
@@ -281,6 +438,7 @@ def generate_mock_data():
                 "longitude": location["longitude"],
                 "accuracy": location["accuracy"],
                 "battery_percentage": location["battery_percentage"],
+                "type": location.get("type", "victim"),
                 "timestamp": location["timestamp"]
             }
             
@@ -290,15 +448,45 @@ def generate_mock_data():
                 "longitude": location["longitude"],
                 "accuracy": location["accuracy"],
                 "battery_percentage": location["battery_percentage"],
+                "type": location.get("type", "victim"),
                 "timestamp": datetime.utcnow(),
                 "phone_data": phone_data
             }
             
             mock_phones.append(phone_data)
         
+        # Generate first responder mock data if requested
+        if num_responders > 0:
+            for i in range(num_responders):
+                responder_id = f"first_responder_{i+1}"
+                location = generate_mock_location("first_responder")
+                
+                phone_data = {
+                    "phone_id": responder_id,
+                    "latitude": location["latitude"],
+                    "longitude": location["longitude"],
+                    "accuracy": location["accuracy"],
+                    "battery_percentage": location["battery_percentage"],
+                    "type": "first_responder",
+                    "timestamp": location["timestamp"]
+                }
+                
+                phone_data_buffer[responder_id] = {
+                    "phone_id": responder_id,
+                    "latitude": location["latitude"],
+                    "longitude": location["longitude"],
+                    "accuracy": location["accuracy"],
+                    "battery_percentage": location["battery_percentage"],
+                    "type": "first_responder",
+                    "timestamp": datetime.utcnow(),
+                    "phone_data": phone_data
+                }
+                
+                mock_phones.append(phone_data)
+        
         return jsonify({
             "status": "success",
-            "message": f"Generated {num_phones} mock phone locations",
+            "message": f"Generated {num_phones} mock phone locations and {num_responders} first responders",
             "phones": mock_phones
         }), 200
         

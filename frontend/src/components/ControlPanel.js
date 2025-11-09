@@ -65,11 +65,13 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
 
       {selectedLocation && (
         <div className="panel-section selected-location-section">
-          <h2>📍 Selected Victim</h2>
+          <h2>{selectedLocation.type === 'first_responder' ? '👤 Selected First Responder' : '📍 Selected Victim'}</h2>
           <div className="location-card">
             <div className="location-header">
               <span className="victim-id">{selectedLocation.phone_id}</span>
-              <div className="battery-indicator" style={{ color: getBatteryColor(selectedLocation.battery_percentage || 0) }}>
+              <div className="battery-indicator" style={{ 
+                color: selectedLocation.type === 'first_responder' ? '#3b82f6' : getBatteryColor(selectedLocation.battery_percentage || 0) 
+              }}>
                 <span className="battery-icon">{getBatteryIcon(selectedLocation.battery_percentage || 0)}</span>
                 <span className="battery-text">{selectedLocation.battery_percentage || 0}%</span>
               </div>
@@ -136,7 +138,7 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
         <div className="info-text">
           <p>🔄 Auto-refresh: Every 15 seconds</p>
           <p>💾 Data sync: Every 5 minutes</p>
-          <p>📍 Mock data: Auto-generated (5 locations every 15s)</p>
+          <p>📍 Initial data: 10 victims + 3-5 first responders (initialized on startup, locations saved to DB)</p>
         </div>
       </div>
     </div>

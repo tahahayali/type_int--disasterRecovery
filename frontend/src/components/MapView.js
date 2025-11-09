@@ -37,6 +37,24 @@ const createVictimIcon = (batteryPercentage = 50, isSelected = false) => {
   });
 };
 
+// Custom first responder marker icon (larger, blue, person icon)
+const createFirstResponderIcon = (isSelected = false) => {
+  const borderColor = isSelected ? '#1e40af' : '#3b82f6';
+  const borderWidth = isSelected ? '4px' : '3px';
+  
+  return L.divIcon({
+    className: 'first-responder-marker',
+    html: `<div class="responder-marker-container" style="border-color: ${borderColor}; border-width: ${borderWidth};">
+            <div class="responder-marker-pin" style="background: #3b82f6;">
+              <span class="responder-icon">👤</span>
+            </div>
+          </div>`,
+    iconSize: [60, 60],  // Larger than victim markers (40x40)
+    iconAnchor: [30, 60],
+    popupAnchor: [0, -60],
+  });
+};
+
 // Component to handle map bounds updates
 function MapBoundsUpdater({ locations }) {
   const map = useMap();
@@ -120,6 +138,7 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
             <MapBoundsUpdater locations={locations} />
             
             {locations.map((location, index) => {
+              const isFirstResponder = location.type === 'first_responder';
               const batteryPercentage = location.battery_percentage || 0;
               const isSelected = selectedLocation?.phone_id === location.phone_id;
               
@@ -127,21 +146,32 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
                 <Marker
                   key={location.phone_id || index}
                   position={[location.latitude, location.longitude]}
-                  icon={createVictimIcon(batteryPercentage, isSelected)}
+                  icon={isFirstResponder 
+                    ? createFirstResponderIcon(isSelected)
+                    : createVictimIcon(batteryPercentage, isSelected)}
                   eventHandlers={{
                     click: () => handleMarkerClick(location),
                     mouseover: () => handleMarkerClick(location),
                   }}
                 >
-                  <Popup className="victim-popup">
+                  <Popup className={isFirstResponder ? "responder-popup" : "victim-popup"}>
                     <div className="popup-content">
-                      <div className="popup-header">
-                        <h3>👤 Victim Location</h3>
-                        <div className="popup-battery" style={{ color: getBatteryColor(batteryPercentage) }}>
-                          <span className="battery-icon">{getBatteryIcon(batteryPercentage)}</span>
-                          <span className="battery-percentage">{batteryPercentage}%</span>
-                          <span className="battery-status">{getBatteryStatus(batteryPercentage)}</span>
-                        </div>
+                      <div className="popup-header" style={isFirstResponder ? { background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)' } : {}}>
+                        <h3>{isFirstResponder ? '👤 First Responder' : '👤 Victim Location'}</h3>
+                        {!isFirstResponder && (
+                          <div className="popup-battery" style={{ color: getBatteryColor(batteryPercentage) }}>
+                            <span className="battery-icon">{getBatteryIcon(batteryPercentage)}</span>
+                            <span className="battery-percentage">{batteryPercentage}%</span>
+                            <span className="battery-status">{getBatteryStatus(batteryPercentage)}</span>
+                          </div>
+                        )}
+                        {isFirstResponder && (
+                          <div className="popup-battery" style={{ color: '#ffffff', background: 'rgba(255, 255, 255, 0.2)' }}>
+                            <span className="battery-icon">🔋</span>
+                            <span className="battery-percentage">{batteryPercentage}%</span>
+                            <span className="battery-status">Active</span>
+                          </div>
+                        )}
                       </div>
                       <div className="popup-body">
                         <div className="popup-row">
