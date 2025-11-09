@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+// File: ControlPanel.js
+import React, { useState, useMemo } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import './ControlPanel.css';
 
 function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, selectedLocation }) {
@@ -11,20 +13,10 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
     setIsGenerating(false);
   };
 
-  const formatDateTime = (dateString) => {
-    if (!dateString) return 'N/A';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString();
-    } catch {
-      return dateString;
-    }
-  };
-
   const getBatteryColor = (percentage) => {
-    if (percentage >= 50) return '#10b981'; // Green
-    if (percentage >= 20) return '#f59e0b'; // Yellow
-    return '#ef4444'; // Red
+    if (percentage >= 50) return '#10b981';
+    if (percentage >= 20) return '#f59e0b';
+    return '#ef4444';
   };
 
   const getBatteryIcon = (percentage) => {
@@ -34,15 +26,22 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
     return '🪫';
   };
 
+  // Generate user_id & mock medical data for selected victim
+  const userInfo = useMemo(() => {
+    if (!selectedLocation || selectedLocation.type !== 'victim') return null;
+    return {
+      user_id: uuidv4(),
+      asthma: Math.random() < 0.3,
+      diabetes: Math.random() < 0.2,
+      cardiac_conditions: Math.random() < 0.15,
+    };
+  }, [selectedLocation]);
+
   return (
     <div className="ControlPanel">
       <div className="panel-section">
         <h2>📊 Statistics</h2>
-        {error && (
-          <div className="error-message">
-            ⚠️ {error}
-          </div>
-        )}
+        {error && <div className="error-message">⚠️ {error}</div>}
         {stats ? (
           <div className="stats-grid">
             <div className="stat-item">
@@ -65,33 +64,57 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
 
       {selectedLocation && (
         <div className="panel-section selected-location-section">
-          <h2>{selectedLocation.type === 'first_responder' ? '👤 Selected First Responder' : '📍 Selected Victim'}</h2>
+          <h2>
+            {selectedLocation.type === 'first_responder'
+              ? '👤 Selected First Responder'
+              : '📍 Selected Victim'}
+          </h2>
           <div className="location-card">
             <div className="location-header">
               <span className="victim-id">{selectedLocation.phone_id}</span>
-              <div className="battery-indicator" style={{ 
-                color: selectedLocation.type === 'first_responder' ? '#3b82f6' : getBatteryColor(selectedLocation.battery_percentage || 0) 
-              }}>
-                <span className="battery-icon">{getBatteryIcon(selectedLocation.battery_percentage || 0)}</span>
-                <span className="battery-text">{selectedLocation.battery_percentage || 0}%</span>
+              <div
+                className="battery-indicator"
+                style={{
+                  color:
+                    selectedLocation.type === 'first_responder'
+                      ? '#3b82f6'
+                      : getBatteryColor(selectedLocation.battery_percentage || 0),
+                }}
+              >
+                <span className="battery-icon">
+                  {getBatteryIcon(selectedLocation.battery_percentage || 0)}
+                </span>
+                <span className="battery-text">
+                  {selectedLocation.battery_percentage || 0}%
+                </span>
               </div>
             </div>
+
             <div className="location-info">
-              <div className="info-row">
-                <span className="info-label">Coordinates</span>
-                <span className="info-value">
-                  {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
-                </span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Accuracy</span>
-                <span className="info-value">{selectedLocation.accuracy?.toFixed(1) || 'N/A'}m</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Last Seen</span>
-                <span className="info-value-small">
-                  {formatDateTime(selectedLocation.last_seen || selectedLocation.timestamp)}
-                </span>
+              {selectedLocation.type === 'victim' && userInfo && (
+                <>
+                  <div className="info-row multiline">
+                    <span className="info-label">User ID:</span>
+                    <span className="info-value break-word">{userInfo.user_id}</span>
+                  </div>
+
+                  <div className="info-row multiline">
+                    <span className="info-label">Medical Info:</span>
+                    <div className="info-value-small">
+                      <div>Asthma: {userInfo.asthma ? 'Yes' : 'No'}</div>
+                      <div>Diabetes: {userInfo.diabetes ? 'Yes' : 'No'}</div>
+                      <div>Cardiac: {userInfo.cardiac_conditions ? 'Yes' : 'No'}</div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="info-row multiline">
+                <span className="info-label">Last Recorded Location:</span>
+                <div className="info-value break-word">
+                  <div>Lat: {selectedLocation.latitude.toFixed(6)}</div>
+                  <div>Lon: {selectedLocation.longitude.toFixed(6)}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -101,14 +124,11 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
       <div className="panel-section">
         <h2>⚙️ Controls</h2>
         <div className="control-group">
-          <button 
-            className="btn btn-primary" 
-            onClick={onRefresh}
-            disabled={loading}
-          >
+          <button className="btn btn-primary" onClick={onRefresh} disabled={loading}>
             {loading ? '⏳ Refreshing...' : '🔄 Refresh Now'}
           </button>
         </div>
+
         <div className="control-group">
           <label htmlFor="mock-count">Manual Test Data</label>
           <div className="input-group">
@@ -138,7 +158,10 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
         <div className="info-text">
           <p>🔄 Auto-refresh: Every 15 seconds</p>
           <p>💾 Data sync: Every 5 minutes</p>
-          <p>📍 Initial data: 10 victims + 3-5 first responders (initialized on startup, locations saved to DB)</p>
+          <p>
+            📍 Initial data: 10 victims + 3–5 first responders (initialized on startup,
+            locations saved to DB)
+          </p>
         </div>
       </div>
     </div>
@@ -146,3 +169,5 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
 }
 
 export default ControlPanel;
+
+

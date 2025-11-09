@@ -270,6 +270,63 @@ initialize_victims()
 storage_thread = threading.Thread(target=store_locations_to_db, daemon=True)
 storage_thread.start()
 
+@app.route('/api/loc', methods=['POST'])
+def receive_location():
+    """Receive latitude and longitude and return them back"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+
+        if latitude is None or longitude is None:
+            return jsonify({"error": "latitude and longitude are required"}), 400
+
+        try:
+            latitude = float(latitude)
+            longitude = float(longitude)
+        except ValueError:
+            return jsonify({"error": "latitude and longitude must be numbers"}), 400
+
+        return jsonify({
+            "status": "success",
+            "latitude": latitude,
+            "longitude": longitude
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/userinfo/<user_id>', methods=['GET'])
+def get_user_info(user_id):
+    """Fetch user medical information from MongoDB by user_id"""
+    try:
+        if db is None:
+            return jsonify({"error": "MongoDB not connected"}), 500
+
+        user_collection = db.get_collection("user_info")
+        user = user_collection.find_one({"user_id": user_id}, {"_id": 0})
+
+        if not user:
+            return jsonify({"error": f"User {user_id} not found"}), 404
+
+        # Ensure required medical fields are included
+        response = {
+            "user_id": user.get("user_id", user_id),
+            "asthma": user.get("asthma", False),
+            "diabetes": user.get("diabetes", False),
+            "cardiac_conditions": user.get("cardiac_conditions", False)
+        }
+
+        return jsonify({"status": "success", "user": response}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # Note: Auto-generation of victims is disabled - only initial 10 victims are created
 # New locations can still be added via the /api/phone-data endpoint and will be saved to DB
 

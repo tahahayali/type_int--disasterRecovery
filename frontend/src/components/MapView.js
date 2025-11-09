@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+// File: MapView.js
+import React, { useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { v4 as uuidv4 } from 'uuid';
 import './MapView.css';
 
 // Fix for default marker icons in React-Leaflet
@@ -11,19 +13,18 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Get battery color based on percentage
+// Battery color helper
 const getBatteryColor = (percentage) => {
-  if (percentage >= 50) return '#10b981'; // Green
-  if (percentage >= 20) return '#f59e0b'; // Yellow/Orange
-  return '#ef4444'; // Red
+  if (percentage >= 50) return '#10b981';
+  if (percentage >= 20) return '#f59e0b';
+  return '#ef4444';
 };
 
-// Custom victim marker icon with battery indicator
+// Custom victim marker
 const createVictimIcon = (batteryPercentage = 50, isSelected = false) => {
   const batteryColor = getBatteryColor(batteryPercentage);
   const borderColor = isSelected ? '#3b82f6' : batteryColor;
   const borderWidth = isSelected ? '3px' : '2px';
-  
   return L.divIcon({
     className: 'victim-marker',
     html: `<div class="marker-container" style="border-color: ${borderColor}; border-width: ${borderWidth};">
@@ -37,11 +38,10 @@ const createVictimIcon = (batteryPercentage = 50, isSelected = false) => {
   });
 };
 
-// Custom first responder marker icon (larger, blue, person icon)
+// Custom first responder marker
 const createFirstResponderIcon = (isSelected = false) => {
   const borderColor = isSelected ? '#1e40af' : '#3b82f6';
   const borderWidth = isSelected ? '4px' : '3px';
-  
   return L.divIcon({
     className: 'first-responder-marker',
     html: `<div class="responder-marker-container" style="border-color: ${borderColor}; border-width: ${borderWidth};">
@@ -49,16 +49,15 @@ const createFirstResponderIcon = (isSelected = false) => {
               <span class="responder-icon">👤</span>
             </div>
           </div>`,
-    iconSize: [60, 60],  // Larger than victim markers (40x40)
+    iconSize: [60, 60],
     iconAnchor: [30, 60],
     popupAnchor: [0, -60],
   });
 };
 
-// Component to handle map bounds updates
+// Adjust map bounds when data changes
 function MapBoundsUpdater({ locations }) {
   const map = useMap();
-  
   useEffect(() => {
     if (locations && locations.length > 0) {
       const bounds = locations.map(loc => [loc.latitude, loc.longitude]);
@@ -67,46 +66,34 @@ function MapBoundsUpdater({ locations }) {
       }
     }
   }, [locations, map]);
-  
   return null;
 }
 
 function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
   const mapRef = useRef(null);
-  const defaultCenter = [42.8864, -78.8784]; // Buffalo, NY area
+  const defaultCenter = [42.8864, -78.8784]; // Buffalo, NY
   const defaultZoom = 12;
 
   const handleMarkerClick = (location) => {
     onLocationSelect(location);
   };
 
-  const formatDateTime = (dateString) => {
-    if (!dateString) return 'Unknown';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
   const getBatteryIcon = (percentage) => {
-    if (percentage >= 75) return '🔋';
     if (percentage >= 50) return '🔋';
     if (percentage >= 20) return '🪫';
     return '🪫';
   };
 
-  const getBatteryStatus = (percentage) => {
-    if (percentage >= 50) return 'Good';
-    if (percentage >= 20) return 'Low';
-    return 'Critical';
-  };
+  // Generate UUIDs for victims (persistent across renders)
+  const victimUUIDs = useMemo(() => {
+    const mapping = {};
+    locations.forEach(loc => {
+      if (loc.type === 'victim') {
+        mapping[loc.phone_id] = uuidv4();
+      }
+    });
+    return mapping;
+  }, [locations]);
 
   return (
     <div className="MapView">
@@ -124,6 +111,7 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
               <p className="empty-subtitle">Waiting for location data...</p>
             </div>
           )}
+
           <MapContainer
             center={defaultCenter}
             zoom={defaultZoom}
@@ -136,63 +124,91 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <MapBoundsUpdater locations={locations} />
-            
+
             {locations.map((location, index) => {
               const isFirstResponder = location.type === 'first_responder';
-              const batteryPercentage = location.battery_percentage || 0;
               const isSelected = selectedLocation?.phone_id === location.phone_id;
-              
+              const batteryPercentage = location.battery_percentage || 0;
+              const uuid = victimUUIDs[location.phone_id];
+
               return (
                 <Marker
                   key={location.phone_id || index}
                   position={[location.latitude, location.longitude]}
-                  icon={isFirstResponder 
-                    ? createFirstResponderIcon(isSelected)
-                    : createVictimIcon(batteryPercentage, isSelected)}
+                  icon={
+                    isFirstResponder
+                      ? createFirstResponderIcon(isSelected)
+                      : createVictimIcon(batteryPercentage, isSelected)
+                  }
                   eventHandlers={{
                     click: () => handleMarkerClick(location),
                     mouseover: () => handleMarkerClick(location),
                   }}
                 >
-                  <Popup className={isFirstResponder ? "responder-popup" : "victim-popup"}>
+                  <Popup
+                    className={isFirstResponder ? 'responder-popup' : 'victim-popup'}
+                  >
                     <div className="popup-content">
-                      <div className="popup-header" style={isFirstResponder ? { background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)' } : {}}>
-                        <h3>{isFirstResponder ? '👤 First Responder' : '👤 Victim Location'}</h3>
-                        {!isFirstResponder && (
-                          <div className="popup-battery" style={{ color: getBatteryColor(batteryPercentage) }}>
-                            <span className="battery-icon">{getBatteryIcon(batteryPercentage)}</span>
-                            <span className="battery-percentage">{batteryPercentage}%</span>
-                            <span className="battery-status">{getBatteryStatus(batteryPercentage)}</span>
-                          </div>
-                        )}
-                        {isFirstResponder && (
-                          <div className="popup-battery" style={{ color: '#ffffff', background: 'rgba(255, 255, 255, 0.2)' }}>
-                            <span className="battery-icon">🔋</span>
-                            <span className="battery-percentage">{batteryPercentage}%</span>
-                            <span className="battery-status">Active</span>
-                          </div>
-                        )}
+                      <div
+                        className="popup-header"
+                        style={
+                          isFirstResponder
+                            ? {
+                                background:
+                                  'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
+                              }
+                            : {}
+                        }
+                      >
+                        <h3>
+                          {isFirstResponder
+                            ? '👤 First Responder'
+                            : '📍 Victim Location'}
+                        </h3>
                       </div>
+
                       <div className="popup-body">
-                        <div className="popup-row">
-                          <span className="popup-label">ID:</span>
-                          <span className="popup-value">{location.phone_id}</span>
-                        </div>
-                        <div className="popup-row">
-                          <span className="popup-label">Coordinates:</span>
-                          <div className="popup-coords">
-                            <div>Lat: {location.latitude.toFixed(6)}</div>
-                            <div>Lon: {location.longitude.toFixed(6)}</div>
+                        {isFirstResponder ? (
+                          <div className="popup-row">
+                            <span className="popup-label">Active Location:</span>
+                            <div className="popup-coords">
+                              <div>Lat: {location.latitude.toFixed(6)}</div>
+                              <div>Lon: {location.longitude.toFixed(6)}</div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="popup-row">
-                          <span className="popup-label">Accuracy:</span>
-                          <span className="popup-value">{location.accuracy?.toFixed(1) || 'N/A'}m</span>
-                        </div>
-                        <div className="popup-row">
-                          <span className="popup-label">Last Seen:</span>
-                          <span className="popup-value-small">{formatDateTime(location.last_seen || location.timestamp)}</span>
-                        </div>
+                        ) : (
+                          <>
+                            <div className="popup-row">
+                              <span className="popup-label">Phone ID:</span>
+                              <span className="popup-value">{location.phone_id}</span>
+                            </div>
+                            <div className="popup-row">
+                              <span className="popup-label">User ID:</span>
+                              <span className="popup-value">{uuid}</span>
+                            </div>
+                            <div className="popup-row">
+                              <span className="popup-label">Battery:</span>
+                              <div
+                                className="popup-battery"
+                                style={{ color: getBatteryColor(batteryPercentage) }}
+                              >
+                                <span className="battery-icon">
+                                  {getBatteryIcon(batteryPercentage)}
+                                </span>
+                                <span className="battery-percentage">
+                                  {batteryPercentage}%
+                                </span>
+                              </div>
+                            </div>
+                            <div className="popup-row">
+                              <span className="popup-label">Last Recorded Location:</span>
+                              <div className="popup-coords">
+                                <div>Lat: {location.latitude.toFixed(6)}</div>
+                                <div>Lon: {location.longitude.toFixed(6)}</div>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </Popup>
@@ -207,3 +223,8 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
 }
 
 export default MapView;
+
+
+
+
+
