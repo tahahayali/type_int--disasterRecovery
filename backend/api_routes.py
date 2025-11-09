@@ -2,7 +2,9 @@ from flask import request, jsonify, Blueprint, send_from_directory, current_app
 from datetime import datetime
 import os
 import threading
-from database_manager import get_latest_locations, get_db_stats, generate_mock_location
+import struct
+import base64
+from database_manager import get_latest_locations, get_db_stats
 
 # Create a blueprint for API routes
 api = Blueprint('api', __name__)
@@ -28,6 +30,338 @@ def health_check():
         "mongodb_connected": collection is not None,
         "buffered_phones": len(buffer) if buffer is not None else 0
     }), 200
+
+
+@api.route('/signup', methods=['POST'])
+def signup():
+    """User signup endpoint - creates a new user record in the database."""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Extract required fields
+        uuid = data.get("uuid")
+        user_type = data.get("type")
+        name = data.get("name")
+        age = data.get("age")
+        height = data.get("height")
+        weight = data.get("weight")
+        medical = data.get("medical")
+        
+        # Validate required fields
+        if not uuid or not user_type or not name:
+            return jsonify({"error": "uuid, type, and name are required"}), 400
+        
+        # Validate uuid is 4 characters
+        if len(uuid) != 4:
+            return jsonify({"error": "uuid must be exactly 4 characters"}), 400
+        
+        # Validate type
+        if user_type not in ["victim", "first_responder"]:
+            return jsonify({"error": "type must be either 'victim' or 'first_responder'"}), 400
+        
+        # Get database reference
+        db = current_app.config['DB']
+        if db is None:
+            return jsonify({"error": "Database not connected"}), 500
+        
+        users_collection = db["users"]
+        
+        # Check if user already exists
+        existing_user = users_collection.find_one({"uuid": uuid})
+        if existing_user:
+            return jsonify({"error": "User with this uuid already exists"}), 409
+        
+        # Create user document with skeleton structure
+        current_time = datetime.utcnow().isoformat()
+        user_document = {
+            "uuid": uuid,
+            "type": user_type,
+            "name": name,
+            "age": age if age is not None else None,
+            "height": height if height is not None else None,
+            "weight": weight if weight is not None else None,
+            "medical": medical if medical is not None else None,
+            "location": {
+                "lat": None,
+                "long": None,
+                "last_updated": None
+            },
+            "battery": {
+                "percentage": None,
+                "time_left_till_off": None,
+                "last_updated": None
+            },
+            "messages": [],
+            "emergency_questionaire": None,
+            "created_at": current_time,
+            "updated_at": current_time
+        }
+        
+        # Insert the user into the database
+        result = users_collection.insert_one(user_document)
+        
+        # Remove the MongoDB _id from the response
+        user_document.pop('_id', None)
+        
+        return jsonify({
+            "status": "success",
+            "message": "User registered successfully",
+            "user": user_document
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error during signup: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+def parse_message_bytes(message_bytes):
+    """
+    Parse a 20-byte message into its components.
+    
+    Format:
+    - Bytes 0-3: message_id (4B uint, big-endian)
+    - Bytes 4-7: sender_id (4B uint, big-endian)
+    - Bytes 8-11: timestamp (4B uint, big-endian, Unix seconds)
+    - Byte 12: payload_type (1B)
+    - Bytes 13-19: payload_data (7B)
+    
+    Returns: dict with parsed fields
+    """
+    if len(message_bytes) != 20:
+        raise ValueError(f"Message must be exactly 20 bytes, got {len(message_bytes)}")
+    
+    # Parse header (12 bytes)
+    message_id = struct.unpack('>I', message_bytes[0:4])[0]
+    sender_id = struct.unpack('>I', message_bytes[4:8])[0]
+    timestamp = struct.unpack('>I', message_bytes[8:12])[0]
+    
+    # Parse payload (8 bytes)
+    payload_type = message_bytes[12]
+    payload_data = message_bytes[13:20]
+    
+    return {
+        'message_id': message_id,
+        'sender_id': sender_id,
+        'timestamp': timestamp,
+        'payload_type': payload_type,
+        'payload_data': payload_data
+    }
+
+
+def parse_type1_location(payload_data):
+    """
+    Parse Type 1 payload: Location (7 bytes)
+    Format: 28 bits lat + 28 bits lon (56 bits total)
+    """
+    # Read 7 bytes as a 56-bit big-endian integer
+    value = 0
+    for i in range(7):
+        value = (value << 8) | payload_data[i]
+    
+    # Extract lat (upper 28 bits) and lon (lower 28 bits)
+    lat_u = (value >> 28) & ((1 << 28) - 1)
+    lon_u = value & ((1 << 28) - 1)
+    
+    # Convert to actual coordinates
+    lat = (lat_u / ((1 << 28) - 1)) * 180.0 - 90.0
+    lon = (lon_u / ((1 << 28) - 1)) * 360.0 - 180.0
+    
+    # Debug logging
+    print(f"DEBUG Location: value={hex(value)}, lat_u={lat_u}, lon_u={lon_u}, lat={lat:.6f}, lon={lon:.6f}")
+    
+    return {'lat': lat, 'long': lon}
+
+
+def parse_type2_questionnaire(payload_data):
+    """
+    Parse Type 2 payload: Questionnaire (7 bytes)
+    Format: 7 yes/no answers (1 byte each: 0x00=No, 0x01=Yes, 0xFF=Unknown)
+    """
+    answers = []
+    for i in range(7):
+        byte_val = payload_data[i]
+        if byte_val == 0x00:
+            answers.append('0')
+        elif byte_val == 0x01:
+            answers.append('1')
+        else:
+            answers.append('0')  # Treat unknown as 0
+    
+    return ''.join(answers)
+
+
+def parse_type3_battery(payload_data):
+    """
+    Parse Type 3 payload: Battery (7 bytes)
+    Format: 2 bytes ASCII percentage + 5 bytes ASCII seconds left
+    """
+    # Parse percentage (2 ASCII digits)
+    percentage_str = payload_data[0:2].decode('ascii', errors='ignore')
+    try:
+        percentage = int(percentage_str)
+    except ValueError:
+        percentage = 0
+    
+    # Parse seconds left (5 ASCII digits)
+    seconds_str = payload_data[2:7].decode('ascii', errors='ignore')
+    try:
+        time_left_till_off = int(seconds_str)
+    except ValueError:
+        time_left_till_off = 0
+    
+    return {
+        'percentage': percentage,
+        'time_left_till_off': time_left_till_off
+    }
+
+
+def parse_type4_message(payload_data):
+    """
+    Parse Type 4 payload: Message (7 bytes)
+    Format: Raw 7 bytes of text/data
+    """
+    # Try to decode as UTF-8, fall back to latin-1
+    try:
+        message_text = payload_data.decode('utf-8', errors='ignore').rstrip('\x00')
+    except:
+        message_text = payload_data.decode('latin-1', errors='ignore').rstrip('\x00')
+    
+    return message_text
+
+
+@api.route('/byte_string', methods=['POST'])
+def receive_byte_string():
+    """
+    Receive and process 20-byte message strings.
+    Updates user records based on message type.
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'messages' not in data:
+            return jsonify({"error": "No messages provided"}), 400
+        
+        messages = data.get('messages', [])
+        
+        if not isinstance(messages, list):
+            return jsonify({"error": "messages must be a list"}), 400
+        
+        db = current_app.config['DB']
+        if db is None:
+            return jsonify({"error": "Database not connected"}), 500
+        
+        users_collection = db["users"]
+        processed_count = 0
+        errors = []
+        
+        for idx, message_str in enumerate(messages):
+            try:
+                # Decode the message (assuming hex encoding)
+                try:
+                    message_bytes = bytes.fromhex(message_str)
+                except ValueError:
+                    # Try base64 if hex fails
+                    try:
+                        message_bytes = base64.b64decode(message_str)
+                    except:
+                        errors.append(f"Message {idx}: Invalid encoding")
+                        continue
+                
+                # Parse the message
+                parsed = parse_message_bytes(message_bytes)
+                
+                # Convert sender_id (4-byte uint) to 4-character string UUID
+                sender_uuid = f"{parsed['sender_id']:04d}"
+                payload_type = parsed['payload_type']
+                timestamp_iso = datetime.utcfromtimestamp(parsed['timestamp']).isoformat()
+                
+                # Find user by UUID
+                user = users_collection.find_one({"uuid": sender_uuid})
+                if not user:
+                    errors.append(f"Message {idx}: User with uuid {sender_uuid} not found")
+                    continue
+                
+                # Update based on payload type
+                update_fields = {"updated_at": datetime.utcnow().isoformat()}
+                
+                if payload_type == 1:
+                    # Location update
+                    location = parse_type1_location(parsed['payload_data'])
+                    update_fields['location'] = {
+                        'lat': location['lat'],
+                        'long': location['long'],
+                        'last_updated': timestamp_iso
+                    }
+                
+                elif payload_type == 2:
+                    # Questionnaire update
+                    questionnaire = parse_type2_questionnaire(parsed['payload_data'])
+                    update_fields['emergency_questionaire'] = questionnaire
+                
+                elif payload_type == 3:
+                    # Battery update
+                    battery = parse_type3_battery(parsed['payload_data'])
+                    update_fields['battery'] = {
+                        'percentage': battery['percentage'],
+                        'time_left_till_off': battery['time_left_till_off'],
+                        'last_updated': timestamp_iso
+                    }
+                
+                elif payload_type == 4:
+                    # Message update - append to messages array
+                    message_text = parse_type4_message(parsed['payload_data'])
+                    message_obj = {
+                        'time': timestamp_iso,
+                        'message': message_text
+                    }
+                    # Use $push to append to messages array
+                    users_collection.update_one(
+                        {"uuid": sender_uuid},
+                        {
+                            "$push": {"messages": message_obj},
+                            "$set": {"updated_at": datetime.utcnow().isoformat()}
+                        }
+                    )
+                    processed_count += 1
+                    continue  # Skip the regular update below
+                
+                elif payload_type == 5:
+                    # BEEP - could log or handle specially, for now just track it
+                    # Don't update any specific field, just the updated_at
+                    pass
+                
+                else:
+                    errors.append(f"Message {idx}: Unknown payload type {payload_type}")
+                    continue
+                
+                # Perform the update for types 1, 2, 3, 5
+                users_collection.update_one(
+                    {"uuid": sender_uuid},
+                    {"$set": update_fields}
+                )
+                processed_count += 1
+                
+            except Exception as e:
+                errors.append(f"Message {idx}: {str(e)}")
+                continue
+        
+        response = {
+            "status": "success",
+            "processed": processed_count,
+            "total": len(messages)
+        }
+        
+        if errors:
+            response['errors'] = errors
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error processing byte_string: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @api.route('/phone-data', methods=['POST'])
@@ -102,65 +436,55 @@ def get_locations():
         return jsonify({"error": str(e)}), 500
 
 
-@api.route('/mock-data', methods=['POST'])
-def generate_mock_data():
-    """Generate and store mock location data for testing in the buffer."""
+@api.route('/all', methods=['GET'])
+def get_all_users():
+    """Get all user records from the database."""
     try:
-        data = request.get_json() or {}
-        num_phones = data.get("count", 5)
-        num_responders = data.get("responders", 0)
-
-        buffer = current_app.config['PHONE_BUFFER']
-
-        mock_phones = []
-
-        # Generate victim mock data
-        for i in range(num_phones):
-            # Use a unique ID that won't clash with initialized victims
-            phone_id = f"manual_mock_victim_{datetime.utcnow().timestamp()}_{i}"
-            location = generate_mock_location("victim")
-
-            # Store in buffer
-            data = {
-                "phone_id": phone_id,
-                "latitude": location["latitude"],
-                "longitude": location["longitude"],
-                "accuracy": location["accuracy"],
-                "battery_percentage": location["battery_percentage"],
-                "type": location.get("type", "victim"),
-                "questionnaire_data": location["questionnaire_data"],
-                "timestamp": datetime.utcnow()
+        db = current_app.config['DB']
+        if db is None:
+            return jsonify({"error": "Database not connected"}), 500
+        
+        users_collection = db["users"]
+        
+        # Fetch all users from the database
+        users = list(users_collection.find({}))
+        
+        # Convert MongoDB documents to JSON-serializable format
+        users_list = []
+        for user in users:
+            user_dict = {
+                "uuid": user.get("uuid"),
+                "type": user.get("type"),
+                "name": user.get("name"),
+                "age": user.get("age"),
+                "height": user.get("height"),
+                "weight": user.get("weight"),
+                "medical": user.get("medical"),
+                "location": user.get("location", {
+                    "lat": None,
+                    "long": None,
+                    "last_updated": None
+                }),
+                "battery": user.get("battery", {
+                    "percentage": None,
+                    "time_left_till_off": None,
+                    "last_updated": None
+                }),
+                "messages": user.get("messages", []),
+                "emergency_questionaire": user.get("emergency_questionaire"),
+                "created_at": user.get("created_at"),
+                "updated_at": user.get("updated_at")
             }
-            buffer[phone_id] = data
-            mock_phones.append({**data, "timestamp": data["timestamp"].isoformat()})
-
-        # Generate first responder mock data if requested
-        for i in range(num_responders):
-            responder_id = f"manual_mock_responder_{datetime.utcnow().timestamp()}_{i}"
-            location = generate_mock_location("first_responder")
-
-            # Store in buffer
-            data = {
-                "phone_id": responder_id,
-                "latitude": location["latitude"],
-                "longitude": location["longitude"],
-                "accuracy": location["accuracy"],
-                "battery_percentage": location["battery_percentage"],
-                "type": "first_responder",
-                "questionnaire_data": location["questionnaire_data"],
-                "timestamp": datetime.utcnow()
-            }
-            buffer[responder_id] = data
-            mock_phones.append({**data, "timestamp": data["timestamp"].isoformat()})
-
+            users_list.append(user_dict)
+        
         return jsonify({
             "status": "success",
-            "message": f"Generated {num_phones} mock victim locations and {num_responders} first responders (buffered)",
-            "phones_buffered": len(buffer)
-        }), 202
-
+            "count": len(users_list),
+            "users": users_list
+        }), 200
+        
     except Exception as e:
-        current_app.logger.error(f"Error generating mock data: {e}")
+        current_app.logger.error(f"Error fetching all users: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -170,7 +494,29 @@ def get_stats():
     try:
         collection = current_app.config['DB_COLLECTION']
         buffer = current_app.config['PHONE_BUFFER']
-
+        db = current_app.config['DB']
+        
+        # Get stats from users collection if available
+        if db is not None:
+            users_collection = db["users"]
+            total_users = users_collection.count_documents({})
+            victims = users_collection.count_documents({"type": "victim"})
+            first_responders = users_collection.count_documents({"type": "first_responder"})
+            
+            # Get most recent update
+            latest_user = users_collection.find_one(sort=[("updated_at", -1)])
+            latest_time = latest_user.get("updated_at") if latest_user else None
+            
+            return jsonify({
+                "status": "success",
+                "total_users": total_users,
+                "victims": victims,
+                "first_responders": first_responders,
+                "unique_phones": total_users,
+                "buffered_phones": len(buffer) if buffer else 0,
+                "latest_update_time": latest_time
+            }), 200
+        
         stats = get_db_stats(collection, buffer)
 
         if stats:

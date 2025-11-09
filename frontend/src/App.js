@@ -15,13 +15,36 @@ function App() {
 
   const fetchLocations = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/locations`);
+      const response = await fetch(`${API_BASE_URL}/api/all`);
       const data = await response.json();
       if (data.status === 'success') {
-        setLocations(data.locations);
+        // Transform user data to location format expected by MapView
+        const transformedLocations = data.users
+          .filter(user => user.location && user.location.lat !== null && user.location.long !== null)
+          .map(user => ({
+            phone_id: user.uuid,
+            uuid: user.uuid,
+            type: user.type,
+            name: user.name,
+            age: user.age,
+            height: user.height,
+            weight: user.weight,
+            medical: user.medical,
+            latitude: user.location.lat,
+            longitude: user.location.long,
+            location_last_updated: user.location.last_updated,
+            battery_percentage: user.battery?.percentage || 0,
+            battery_time_left: user.battery?.time_left_till_off || 0,
+            battery_last_updated: user.battery?.last_updated,
+            messages: user.messages || [],
+            emergency_questionaire: user.emergency_questionaire,
+            created_at: user.created_at,
+            updated_at: user.updated_at
+          }));
+        setLocations(transformedLocations);
         setError(null);
       } else {
-        setError(data.error || 'Failed to fetch locations');
+        setError(data.error || 'Failed to fetch users');
       }
     } catch (err) {
       setError('Failed to connect to server. Make sure Flask backend is running.');
@@ -44,25 +67,8 @@ function App() {
   };
 
   const generateMockData = async (count = 5) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/mock-data`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ count }),
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
-        // Refresh locations after generating mock data
-        setTimeout(() => {
-          fetchLocations();
-          fetchStats();
-        }, 500);
-      }
-    } catch (err) {
-      console.error('Error generating mock data:', err);
-    }
+    // Mock data generation removed - users must sign up via /api/signup
+    console.log('Mock data generation disabled. Use /api/signup to create users.');
   };
 
   useEffect(() => {

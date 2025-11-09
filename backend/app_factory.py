@@ -22,9 +22,14 @@ def init_mongo():
         db = client[DB_NAME]
         collection = db["victim_locations"]
 
-        # Ensure indexes for faster queries
+        # Ensure indexes for faster queries on victim_locations
         collection.create_index([("phone_id", 1), ("timestamp", -1)])
         collection.create_index([("timestamp", -1)])
+        
+        # Create users collection and indexes
+        users_collection = db["users"]
+        users_collection.create_index([("uuid", 1)], unique=True)
+        
         print("Connected to MongoDB successfully")
     except Exception as e:
         print(f"MongoDB connection error: {e}")
@@ -33,13 +38,14 @@ def init_mongo():
     return client, db, collection
 
 
-def create_app(db_collection=None, phone_buffer=None):
+def create_app(db_collection=None, phone_buffer=None, db=None):
     """
     Creates and configures the Flask application.
 
     Args:
         db_collection: The MongoDB collection object for victim data.
         phone_buffer: The in-memory buffer for recent phone data.
+        db: The MongoDB database object.
     """
     # Determine the base directory and static folder
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +58,7 @@ def create_app(db_collection=None, phone_buffer=None):
     # Store the database and buffer references in the app config for use in routes
     app.config['DB_COLLECTION'] = db_collection
     app.config['PHONE_BUFFER'] = phone_buffer
+    app.config['DB'] = db
 
     return app
 

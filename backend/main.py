@@ -2,7 +2,7 @@ import os
 import threading
 from flask import send_from_directory, jsonify
 from app_factory import create_app, init_mongo
-from database_manager import store_locations_to_db, initialize_data
+from database_manager import store_locations_to_db
 from api_routes import api
 from typing import Dict, List
 
@@ -15,20 +15,12 @@ phone_data_buffer: Dict[str, Dict] = {}
 client, db, collection = init_mongo()
 
 # 2. Create the Flask app, passing the database reference and buffer
-app = create_app(db_collection=collection, phone_buffer=phone_data_buffer)
+app = create_app(db_collection=collection, phone_buffer=phone_data_buffer, db=db)
 
 # 3. Register the API blueprint
 app.register_blueprint(api, url_prefix='/api')
 
-# 4. Initialize mock/default data (victims and first responders)
-# This runs once at startup
-with app.app_context():
-    if collection is not None:
-        initialize_data(collection, phone_data_buffer)
-    else:
-        print("Warning: MongoDB not available. Initial data is only stored in buffer.")
-
-# 5. Start background thread for storing locations to database
+# 4. Start background thread for storing locations to database
 if collection is not None:
     storage_thread = threading.Thread(
         target=store_locations_to_db,

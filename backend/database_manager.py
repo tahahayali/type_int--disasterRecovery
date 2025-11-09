@@ -6,46 +6,6 @@ from typing import Dict, List
 from pymongo.collection import Collection
 from bson.objectid import ObjectId
 
-# First responder IDs for consistent tracking
-FIRST_RESPONDER_IDS = [f"first_responder_{i + 1}" for i in range(5)]
-
-
-def generate_mock_location(person_type="victim"):
-    """Generate mock location data for victims or first responders"""
-    # Simulate locations around a disaster area (e.g., Buffalo, NY area)
-    base_lat = 42.8864
-    base_lon = -78.8784
-    # Add random offset (within ~10km radius)
-    lat_offset = random.uniform(-0.1, 0.1)
-    lon_offset = random.uniform(-0.1, 0.1)
-
-    if person_type == "first_responder":
-        accuracy = random.uniform(3, 15)  # Better GPS accuracy
-        battery_percentage = random.randint(60, 100)  # Higher battery
-    else:
-        accuracy = random.uniform(5, 50)  # GPS accuracy in meters
-        battery_percentage = random.randint(5, 100)  # Battery percentage (5-100%)
-
-    # Randomly add questionnaire data for victims
-    questionnaire_data = {}
-    if person_type == "victim":
-        questionnaire_data = {
-            "injured": random.choice([True, False]),
-            "people_count": random.randint(1, 5),
-            "shelter_status": random.choice(["OK", "Damaged", "Destroyed"]),
-            "medical_needs": random.choice([True, False])
-        }
-
-    return {
-        "latitude": base_lat + lat_offset,
-        "longitude": base_lon + lon_offset,
-        "accuracy": accuracy,
-        "battery_percentage": battery_percentage,
-        "timestamp": datetime.utcnow().isoformat(),
-        "type": person_type,
-        "questionnaire_data": questionnaire_data
-    }
-
 
 def store_locations_to_db(collection: Collection, phone_data_buffer: Dict[str, Dict]):
     """Store all buffered phone data to MongoDB every 5 minutes (300 seconds)"""
@@ -102,77 +62,6 @@ def store_locations_to_db(collection: Collection, phone_data_buffer: Dict[str, D
             for doc in documents:
                 phone_data_buffer[doc["phone_id"]] = doc
             print(f"Re-added {len(documents)} items to buffer due to DB error.")
-
-
-def initialize_data(collection: Collection, phone_data_buffer: Dict[str, Dict]):
-    """Initialize mock first responders and victims on startup."""
-    current_time = datetime.utcnow()
-    documents = []
-
-    # 1. Initialize First Responders (3-5)
-    num_responders = random.randint(3, 5)
-    for i in range(num_responders):
-        responder_id = FIRST_RESPONDER_IDS[i]
-        location = generate_mock_location("first_responder")
-
-        # Prepare data for both buffer (immediate use) and DB (history)
-        data = {
-            "phone_id": responder_id,
-            "latitude": location["latitude"],
-            "longitude": location["longitude"],
-            "accuracy": location["accuracy"],
-            "battery_percentage": location["battery_percentage"],
-            "type": "first_responder",
-            "timestamp": current_time,
-            "questionnaire_data": location["questionnaire_data"]
-        }
-        phone_data_buffer[responder_id] = data
-
-        if collection is not None:
-            doc = {
-                **data,  # unpack all data fields
-                "location": {"type": "Point", "coordinates": [data["longitude"], data["latitude"]]},
-                "last_seen": current_time,
-            }
-            documents.append(doc)
-
-    # 2. Initialize Victims (10)
-    num_victims = 10
-    for i in range(num_victims):
-        victim_id = f"victim_{i + 1}"
-        location = generate_mock_location("victim")
-
-        data = {
-            "phone_id": victim_id,
-            "latitude": location["latitude"],
-            "longitude": location["longitude"],
-            "accuracy": location["accuracy"],
-            "battery_percentage": location["battery_percentage"],
-            "type": "victim",
-            "timestamp": current_time,
-            "questionnaire_data": location["questionnaire_data"]
-        }
-        phone_data_buffer[victim_id] = data
-
-        if collection is not None:
-            doc = {
-                **data,
-                "location": {"type": "Point", "coordinates": [data["longitude"], data["latitude"]]},
-                "last_seen": current_time,
-            }
-            documents.append(doc)
-
-    # Store directly to database if available
-    if collection is not None and documents:
-        try:
-            collection.insert_many(documents)
-            print(
-                f"Initialized {num_responders} first responders and {num_victims} victims on startup (stored in database)")
-        except Exception as db_error:
-            print(f"Database storage failed during initialization: {db_error}")
-    else:
-        print(
-            f"Initialized {num_responders} responders and {num_victims} victims (database not available, stored in buffer only)")
 
 
 def get_latest_locations(collection: Collection, phone_data_buffer: Dict[str, Dict], hours: int = 24,

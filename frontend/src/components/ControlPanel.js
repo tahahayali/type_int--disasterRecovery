@@ -1,6 +1,5 @@
 // File: ControlPanel.js
-import React, { useState, useMemo } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import React, { useState } from 'react';
 import './ControlPanel.css';
 
 function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, selectedLocation }) {
@@ -26,16 +25,16 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
     return '🪫';
   };
 
-  // Generate user_id & mock medical data for selected victim
-  const userInfo = useMemo(() => {
-    if (!selectedLocation || selectedLocation.type !== 'victim') return null;
-    return {
-      user_id: uuidv4(),
-      asthma: Math.random() < 0.3,
-      diabetes: Math.random() < 0.2,
-      cardiac_conditions: Math.random() < 0.15,
-    };
-  }, [selectedLocation]);
+  // Format battery time left
+  const formatTimeLeft = (seconds) => {
+    if (!seconds || seconds === 0) return 'Unknown';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
 
   return (
     <div className="ControlPanel">
@@ -45,16 +44,16 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
         {stats ? (
           <div className="stats-grid">
             <div className="stat-item">
-              <div className="stat-label">Active Victims</div>
-              <div className="stat-value">{stats.unique_phones || 0}</div>
+              <div className="stat-label">Victims</div>
+              <div className="stat-value">{stats.victims || 0}</div>
             </div>
             <div className="stat-item">
-              <div className="stat-label">Total Records</div>
-              <div className="stat-value">{stats.total_locations || 0}</div>
+              <div className="stat-label">First Responders</div>
+              <div className="stat-value">{stats.first_responders || 0}</div>
             </div>
             <div className="stat-item stat-item-full">
-              <div className="stat-label">Pending Sync</div>
-              <div className="stat-value-small">{stats.buffered_phones || 0} locations</div>
+              <div className="stat-label">Total Users</div>
+              <div className="stat-value-small">{stats.total_users || 0} users</div>
             </div>
           </div>
         ) : (
@@ -91,26 +90,62 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
             </div>
 
             <div className="location-info">
-              {selectedLocation.type === 'victim' && userInfo && (
-                <>
-                  <div className="info-row multiline">
-                    <span className="info-label">User ID:</span>
-                    <span className="info-value break-word">{userInfo.user_id}</span>
-                  </div>
+              <div className="info-row multiline">
+                <span className="info-label">UUID:</span>
+                <span className="info-value break-word">{selectedLocation.uuid}</span>
+              </div>
 
-                  <div className="info-row multiline">
-                    <span className="info-label">Medical Info:</span>
-                    <div className="info-value-small">
-                      <div>Asthma: {userInfo.asthma ? 'Yes' : 'No'}</div>
-                      <div>Diabetes: {userInfo.diabetes ? 'Yes' : 'No'}</div>
-                      <div>Cardiac: {userInfo.cardiac_conditions ? 'Yes' : 'No'}</div>
+              {selectedLocation.type === 'victim' && (
+                <>
+                  {selectedLocation.name && (
+                    <div className="info-row multiline">
+                      <span className="info-label">Name:</span>
+                      <span className="info-value">{selectedLocation.name}</span>
                     </div>
-                  </div>
+                  )}
+
+                  {(selectedLocation.age || selectedLocation.height || selectedLocation.weight) && (
+                    <div className="info-row multiline">
+                      <span className="info-label">Profile:</span>
+                      <div className="info-value-small">
+                        {selectedLocation.age && <div>Age: {selectedLocation.age}</div>}
+                        {selectedLocation.height && <div>Height: {selectedLocation.height}</div>}
+                        {selectedLocation.weight && <div>Weight: {selectedLocation.weight}</div>}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedLocation.medical && (
+                    <div className="info-row multiline">
+                      <span className="info-label">Medical Info:</span>
+                      <div className="info-value-small">
+                        {selectedLocation.medical}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedLocation.battery_time_left > 0 && (
+                    <div className="info-row multiline">
+                      <span className="info-label">Battery Time:</span>
+                      <span className="info-value-small">
+                        {formatTimeLeft(selectedLocation.battery_time_left)}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedLocation.messages && selectedLocation.messages.length > 0 && (
+                    <div className="info-row multiline">
+                      <span className="info-label">Messages:</span>
+                      <span className="info-value-small">
+                        {selectedLocation.messages.length} message(s)
+                      </span>
+                    </div>
+                  )}
                 </>
               )}
 
               <div className="info-row multiline">
-                <span className="info-label">Last Recorded Location:</span>
+                <span className="info-label">Location:</span>
                 <div className="info-value break-word">
                   <div>Lat: {selectedLocation.latitude.toFixed(6)}</div>
                   <div>Lon: {selectedLocation.longitude.toFixed(6)}</div>
@@ -157,11 +192,9 @@ function ControlPanel({ stats, loading, error, onGenerateMockData, onRefresh, se
         <h2>ℹ️ System Info</h2>
         <div className="info-text">
           <p>🔄 Auto-refresh: Every 15 seconds</p>
-          <p>💾 Data sync: Every 5 minutes</p>
-          <p>
-            📍 Initial data: 10 victims + 3–5 first responders (initialized on startup,
-            locations saved to DB)
-          </p>
+          <p>💾 Real-time data from MongoDB</p>
+          <p>📍 Use /api/signup to create users</p>
+          <p>📡 Use /api/byte_string to update data</p>
         </div>
       </div>
     </div>

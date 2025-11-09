@@ -2,7 +2,6 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { v4 as uuidv4 } from 'uuid';
 import './MapView.css';
 
 // Fix for default marker icons in React-Leaflet
@@ -82,16 +81,32 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
     return '🪫';
   };
 
-  // Generate UUIDs for victims (persistent across renders)
-  const victimUUIDs = useMemo(() => {
-    const mapping = {};
-    locations.forEach((loc) => {
-      if (loc.type === 'victim') {
-        mapping[loc.phone_id] = uuidv4();
-      }
-    });
-    return mapping;
-  }, [locations]);
+  const formatTimeLeft = (seconds) => {
+    if (!seconds || seconds === 0) return 'Unknown';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  const parseQuestionnaire = (questionnaireStr) => {
+    if (!questionnaireStr || questionnaireStr.length !== 7) return null;
+    const questions = [
+      'Injured?',
+      'Trapped?',
+      'Medical Emergency?',
+      'Need Water?',
+      'Need Food?',
+      'Need Shelter?',
+      'Other Help?'
+    ];
+    return questions.map((q, i) => ({
+      question: q,
+      answer: questionnaireStr[i] === '1' ? 'Yes' : 'No'
+    }));
+  };
 
   // Filter out saved victims so they don’t show on the map
   const visibleLocations = useMemo(() => {
@@ -138,7 +153,7 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
               const isFirstResponder = location.type === 'first_responder';
               const isSelected = selectedLocation?.phone_id === location.phone_id;
               const batteryPercentage = location.battery_percentage || 0;
-              const uuid = victimUUIDs[location.phone_id];
+              const questionnaireData = parseQuestionnaire(location.emergency_questionaire);
 
               return (
                 <Marker
@@ -156,6 +171,7 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
                 >
                   <Popup
                     className={isFirstResponder ? 'responder-popup' : 'victim-popup'}
+                    maxHeight={400}
                   >
                     <div className="popup-content">
                       <div
@@ -172,29 +188,63 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
                         <h3>
                           {isFirstResponder
                             ? '👤 First Responder'
-                            : '📍 Victim Location'}
+                            : '🆘 Victim Details'}
                         </h3>
                       </div>
 
                       <div className="popup-body">
                         {isFirstResponder ? (
-                          <div className="popup-row">
-                            <span className="popup-label">Active Location:</span>
-                            <div className="popup-coords">
-                              <div>Lat: {location.latitude.toFixed(6)}</div>
-                              <div>Lon: {location.longitude.toFixed(6)}</div>
+                          <>
+                            <div className="popup-row">
+                              <span className="popup-label">ID:</span>
+                              <span className="popup-value">{location.uuid}</span>
                             </div>
-                          </div>
+                            {location.name && (
+                              <div className="popup-row">
+                                <span className="popup-label">Name:</span>
+                                <span className="popup-value">{location.name}</span>
+                              </div>
+                            )}
+                            <div className="popup-row">
+                              <span className="popup-label">Location:</span>
+                              <div className="popup-coords">
+                                <div>Lat: {location.latitude.toFixed(6)}</div>
+                                <div>Lon: {location.longitude.toFixed(6)}</div>
+                              </div>
+                            </div>
+                          </>
                         ) : (
                           <>
                             <div className="popup-row">
-                              <span className="popup-label">Phone ID:</span>
-                              <span className="popup-value">{location.phone_id}</span>
+                              <span className="popup-label">UUID:</span>
+                              <span className="popup-value">{location.uuid}</span>
                             </div>
-                            <div className="popup-row">
-                              <span className="popup-label">User ID:</span>
-                              <span className="popup-value">{uuid}</span>
-                            </div>
+                            
+                            {location.name && (
+                              <div className="popup-row">
+                                <span className="popup-label">Name:</span>
+                                <span className="popup-value">{location.name}</span>
+                              </div>
+                            )}
+                            
+                            {(location.age || location.height || location.weight) && (
+                              <div className="popup-row">
+                                <span className="popup-label">Profile:</span>
+                                <div className="popup-value">
+                                  {location.age && <div>Age: {location.age}</div>}
+                                  {location.height && <div>Height: {location.height}</div>}
+                                  {location.weight && <div>Weight: {location.weight}</div>}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {location.medical && (
+                              <div className="popup-row">
+                                <span className="popup-label">Medical:</span>
+                                <span className="popup-value">{location.medical}</span>
+                              </div>
+                            )}
+                            
                             <div className="popup-row">
                               <span className="popup-label">Battery:</span>
                               <div
@@ -207,17 +257,59 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
                                 <span className="battery-percentage">
                                   {batteryPercentage}%
                                 </span>
+                                {location.battery_time_left > 0 && (
+                                  <span className="battery-time">
+                                    ({formatTimeLeft(location.battery_time_left)})
+                                  </span>
+                                )}
                               </div>
                             </div>
+                            
                             <div className="popup-row">
-                              <span className="popup-label">Last Recorded Location:</span>
+                              <span className="popup-label">Location:</span>
                               <div className="popup-coords">
                                 <div>Lat: {location.latitude.toFixed(6)}</div>
                                 <div>Lon: {location.longitude.toFixed(6)}</div>
                               </div>
                             </div>
+                            
+                            {questionnaireData && (
+                              <div className="popup-row">
+                                <span className="popup-label">Emergency Status:</span>
+                                <div className="questionnaire-data">
+                                  {questionnaireData.map((item, idx) => (
+                                    <div key={idx} className="questionnaire-item">
+                                      <span className={item.answer === 'Yes' ? 'status-yes' : 'status-no'}>
+                                        {item.answer === 'Yes' ? '✓' : '✗'}
+                                      </span>
+                                      <span>{item.question}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {location.messages && location.messages.length > 0 && (
+                              <div className="popup-row">
+                                <span className="popup-label">Messages:</span>
+                                <div className="messages-container">
+                                  {location.messages.slice(-3).map((msg, idx) => (
+                                    <div key={idx} className="message-item">
+                                      <div className="message-time">
+                                        {new Date(msg.time).toLocaleTimeString()}
+                                      </div>
+                                      <div className="message-text">{msg.message}</div>
+                                    </div>
+                                  ))}
+                                  {location.messages.length > 3 && (
+                                    <div className="message-more">
+                                      +{location.messages.length - 3} more
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
 
-                            {/* ✅ NEW: Mark as Saved button */}
                             <div className="popup-actions">
                               <button
                                 className="btn-save"
