@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">Android__Front_end</string>
+    <string name="app_name">TypeInt Rescue Tool</string>
+    <string name="are_you_injured">Are you injured?</string>
+    <string name="speak_or_type_your_answer_here">Speak or type your answer here</string>
 </resources>
