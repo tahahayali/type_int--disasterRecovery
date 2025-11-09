@@ -259,6 +259,9 @@ def receive_byte_string():
         
         for idx, message_str in enumerate(messages):
             try:
+                # DEBUG: Log raw message
+                current_app.logger.info(f"Received message {idx}: {message_str[:40]}...")
+                
                 # Decode the message (assuming hex encoding)
                 try:
                     message_bytes = bytes.fromhex(message_str)
@@ -268,6 +271,7 @@ def receive_byte_string():
                         message_bytes = base64.b64decode(message_str)
                     except:
                         errors.append(f"Message {idx}: Invalid encoding")
+                        current_app.logger.error(f"Message {idx}: Invalid encoding - {message_str[:40]}")
                         continue
                 
                 # Parse the message
@@ -278,11 +282,17 @@ def receive_byte_string():
                 payload_type = parsed['payload_type']
                 timestamp_iso = datetime.utcfromtimestamp(parsed['timestamp']).isoformat()
                 
+                # DEBUG: Log what we're looking for
+                current_app.logger.info(f"Processing message {idx}: sender_id={parsed['sender_id']}, sender_uuid={sender_uuid}, type={payload_type}")
+                
                 # Find user by UUID
                 user = users_collection.find_one({"uuid": sender_uuid})
                 if not user:
+                    current_app.logger.warning(f"User with uuid '{sender_uuid}' not found (sender_id={parsed['sender_id']})")
                     errors.append(f"Message {idx}: User with uuid {sender_uuid} not found")
                     continue
+                
+                current_app.logger.info(f"Found user: {user.get('name')} ({sender_uuid})")
                 
                 # Update based on payload type
                 update_fields = {"updated_at": datetime.utcnow().isoformat()}
@@ -338,10 +348,11 @@ def receive_byte_string():
                     continue
                 
                 # Perform the update for types 1, 2, 3, 5
-                users_collection.update_one(
+                result = users_collection.update_one(
                     {"uuid": sender_uuid},
                     {"$set": update_fields}
                 )
+                current_app.logger.info(f"Update result: matched={result.matched_count}, modified={result.modified_count}, fields={list(update_fields.keys())}")
                 processed_count += 1
                 
             except Exception as e:
