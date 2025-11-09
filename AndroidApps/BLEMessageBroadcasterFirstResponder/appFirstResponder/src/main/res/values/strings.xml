@@ -1,0 +1,38 @@
+<resources>
+    <string name="app_name">typFirstResponder</string>
+    
+    <!-- Device Name Section -->
+    <string name="device_name_label">Your Device Name</string>
+    <string name="device_name_hint">Enter device name</string>
+    
+    <!-- Status Messages -->
+    <string name="status_stopped">Status: Waiting for permissions...</string>
+    <string name="status_running">Status: Broadcasting &amp; Listening 📡</string>
+    
+    <!-- Message Input -->
+    <string name="send_message_label">Broadcast Message</string>
+    <string name="message_hint">Type message (max 7 characters)</string>
+    <string name="send_button">BROADCAST</string>
+    
+    <!-- Message History -->
+    <string name="message_history_label">Message History</string>
+    <string name="clear_button">CLEAR</string>
+    <string name="no_messages">No messages yet. Start broadcasting to see messages here.</string>
+    
+    <!-- Permissions -->
+    <string name="permission_required">Permissions Required</string>
+    <string name="permission_message">This app requires Bluetooth and Location permissions for BLE mesh networking. The app will auto-start once permissions are granted.</string>
+    <string name="permission_denied">Permissions were denied. The app needs these permissions to relay messages in the mesh network. Tap Retry to grant permissions.</string>
+    
+    <!-- First Responder Specific -->
+    <string name="send_location">📍 Send Location</string>
+    <string name="send_battery">🔋 Send Battery</string>
+    <string name="send_beep">🔔 Send BEEP</string>
+    <string name="auto_location_info">Auto-sending location every 30 seconds</string>
+    
+    <!-- Signup -->
+    <string name="signup_title">First Responder Registration</string>
+    <string name="name_hint">Enter your name</string>
+    <string name="submit_button">REGISTER</string>
+</resources>
+
