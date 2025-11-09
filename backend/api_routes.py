@@ -287,14 +287,18 @@ def receive_byte_string():
                 # Try to decode as ASCII first (for alphanumeric UUIDs)
                 try:
                     sender_id_bytes = sender_id_int.to_bytes(4, byteorder='big')
+                    current_app.logger.debug(f"Sender ID bytes: {sender_id_bytes.hex()} = {sender_id_bytes}")
                     # Try to decode as ASCII/UTF-8 and strip null bytes
                     sender_uuid = sender_id_bytes.decode('ascii').rstrip('\x00')
+                    current_app.logger.debug(f"Decoded ASCII: '{sender_uuid}' (printable: {sender_uuid.isprintable() if sender_uuid else False})")
                     # If it's empty or contains non-printable chars, fall back to numeric
-                    if not sender_uuid or not sender_uuid.isprintable():
+                    if not sender_uuid or not sender_uuid.isprintable() or len(sender_uuid) > 4:
                         raise ValueError("Not a valid ASCII UUID")
-                except (ValueError, UnicodeDecodeError):
+                    current_app.logger.info(f"Using ASCII UUID: '{sender_uuid}'")
+                except (ValueError, UnicodeDecodeError) as e:
                     # Fall back to zero-padded numeric format
                     sender_uuid = f"{sender_id_int:04d}"
+                    current_app.logger.info(f"Falling back to numeric UUID: '{sender_uuid}' (reason: {e})")
                 
                 payload_type = parsed['payload_type']
                 timestamp_iso = datetime.utcfromtimestamp(parsed['timestamp']).isoformat()
