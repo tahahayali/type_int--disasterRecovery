@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var emergencyButton: MaterialButton
     private lateinit var sendLocationButton: MaterialButton
     private lateinit var sendBatteryButton: MaterialButton
+    private lateinit var stopBeepButton: MaterialButton
     private lateinit var deviceNameInput: TextInputEditText
     private lateinit var startButton: MaterialButton
     private lateinit var stopButton: MaterialButton
@@ -68,9 +69,10 @@ class MainActivity : AppCompatActivity() {
     private var emergencyAnswers = BooleanArray(4) // 4 yes/no answers
     
     // Beep handling
-    private var beepHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val beepHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var beepRunnable: Runnable? = null
     private val processedBeepUUIDs = mutableSetOf<Int>() // Track which beep messages already triggered alert
+    private var currentRingtone: android.media.Ringtone? = null
     
     // Permission request launcher
     private val permissionLauncher = registerForActivityResult(
@@ -186,6 +188,7 @@ class MainActivity : AppCompatActivity() {
         emergencyButton = findViewById(R.id.emergencyButton)
         sendLocationButton = findViewById(R.id.sendLocationButton)
         sendBatteryButton = findViewById(R.id.sendBatteryButton)
+        stopBeepButton = findViewById(R.id.stopBeepButton)
         deviceNameInput = findViewById(R.id.deviceNameInput)
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
@@ -504,6 +507,11 @@ class MainActivity : AppCompatActivity() {
                 sendCurrentBattery()
             }
             
+            stopBeepButton.setOnClickListener {
+                stopBeepAlert()
+                Toast.makeText(this, "🔕 Beep alert stopped", Toast.LENGTH_SHORT).show()
+            }
+            
             sendButton.setOnClickListener {
                 sendMessage()
             }
@@ -767,44 +775,63 @@ class MainActivity : AppCompatActivity() {
         // Stop any existing beep
         stopBeepAlert()
         
-        // Create repeating beep/vibration pattern
-        beepRunnable = object : Runnable {
-            private var elapsedSeconds = 0
+        try {
+            // Get notification ringtone
+            val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            currentRingtone = RingtoneManager.getRingtone(applicationContext, notificationUri)
             
-            override fun run() {
-                if (elapsedSeconds < 30) {
-                    // Vibrate
-                    try {
-                        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
-                        } else {
-                            @Suppress("DEPRECATION")
-                            vibrator.vibrate(500)
+            // Create repeating beep/vibration pattern
+            beepRunnable = object : Runnable {
+                private var beepCount = 0
+                private val maxBeeps = 30 // 30 beeps over 30 seconds
+                
+                override fun run() {
+                    if (beepCount < maxBeeps) {
+                        try {
+                            // Vibrate (short burst)
+                            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                            vibrator?.let {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    it.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE))
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    it.vibrate(300)
+                                }
+                            }
+                            
+                            // Play sound (if not already playing)
+                            currentRingtone?.let { ringtone ->
+                                if (!ringtone.isPlaying) {
+                                    ringtone.play()
+                                }
+                            }
+                            
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error in beep alert", e)
                         }
-                    } catch (e: Exception) {
-                        Log.e("MainActivity", "Error vibrating", e)
+                        
+                        beepCount++
+                        beepHandler.postDelayed(this, 1000) // Every 1 second
+                    } else {
+                        // Finished
+                        Log.d("MainActivity", "🔔 Beep alert finished (30 seconds)")
+                        stopBeepAlert()
                     }
-                    
-                    // Play notification sound
-                    try {
-                        val notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                        val ringtone = RingtoneManager.getRingtone(applicationContext, notification)
-                        ringtone.play()
-                    } catch (e: Exception) {
-                        Log.e("MainActivity", "Error playing sound", e)
-                    }
-                    
-                    elapsedSeconds++
-                    beepHandler.postDelayed(this, 1000) // Beep every second
-                } else {
-                    Log.d("MainActivity", "🔔 Beep alert finished (30 seconds)")
                 }
             }
+            
+            beepHandler.post(beepRunnable!!)
+            
+            // Show stop button
+            stopBeepButton.visibility = View.VISIBLE
+            
+            Toast.makeText(this, "🔔 BEEP ALERT! Alarming for 30 seconds", Toast.LENGTH_LONG).show()
+            
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error starting beep alert", e)
+            Toast.makeText(this, "⚠️ Could not start alarm", Toast.LENGTH_SHORT).show()
         }
-        
-        beepHandler.post(beepRunnable!!)
-        Toast.makeText(this, "🔔 BEEP ALERT! (30 seconds)", Toast.LENGTH_LONG).show()
     }
     
     /**
@@ -814,6 +841,18 @@ class MainActivity : AppCompatActivity() {
         beepRunnable?.let {
             beepHandler.removeCallbacks(it)
             beepRunnable = null
+        }
+        
+        currentRingtone?.let {
+            if (it.isPlaying) {
+                it.stop()
+            }
+            currentRingtone = null
+        }
+        
+        // Hide stop button
+        if (::stopBeepButton.isInitialized) {
+            stopBeepButton.visibility = View.GONE
         }
     }
     

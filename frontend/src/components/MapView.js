@@ -58,7 +58,11 @@ function MapBoundsUpdater({ locations }) {
     if (locations && locations.length > 0) {
       const bounds = locations.map((loc) => [loc.latitude, loc.longitude]);
       if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        // Fit bounds with padding and slightly limited zoom
+        map.fitBounds(bounds, { 
+          padding: [100, 100],
+          maxZoom: 17  // Zoom in close but not too extreme
+        });
       }
     }
   }, [locations, map]);
@@ -136,6 +140,8 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
           <MapContainer
             center={defaultCenter}
             zoom={defaultZoom}
+            maxZoom={22}
+            minZoom={3}
             style={{ height: '100%', width: '100%' }}
             ref={mapRef}
             scrollWheelZoom={true}
@@ -143,6 +149,8 @@ function MapView({ locations, loading, onLocationSelect, selectedLocation }) {
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maxNativeZoom={19}
+              maxZoom={22}
             />
             <MapBoundsUpdater locations={visibleLocations} />
 
